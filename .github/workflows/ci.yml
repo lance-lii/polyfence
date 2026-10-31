@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Dogfood the example policy
+        run: node dist/src/cli.js test --policy examples/polyfence.yaml
+      - name: Bundled bin/ is up to date
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: |
+          npm run bundle
+          git diff --exit-code bin/ || (echo "Run 'npm run bundle' and commit bin/polyfence.cjs" && exit 1)

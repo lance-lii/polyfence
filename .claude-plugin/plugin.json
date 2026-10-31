@@ -1,0 +1,17 @@
+{
+  "name": "polyfence",
+  "version": "0.1.0",
+  "description": "One guardrail policy for every AI coding agent. Blocks force-pushes, secret reads, rm -rf, curl | sh and more, from a single polyfence.yaml that also works in Codex, Gemini CLI and Antigravity.",
+  "author": {
+    "name": "Lance Li"
+  },
+  "homepage": "https://github.com/lance-lii/polyfence",
+  "repository": "https://github.com/lance-lii/polyfence",
+  "license": "MIT",
+  "keywords": [
+    "guardrails",
+    "security",
+    "policy",
+    "hooks"
+  ]
+}
