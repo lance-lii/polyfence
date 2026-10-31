@@ -1,0 +1,52 @@
+{
+  "name": "polyfence",
+  "version": "0.1.0",
+  "description": "One guardrail policy for every AI coding agent. Write it once, enforce it in Claude Code, Codex, Gemini CLI and Antigravity.",
+  "author": "Lance Li",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lance-lii/polyfence.git"
+  },
+  "homepage": "https://github.com/lance-lii/polyfence#readme",
+  "bugs": {
+    "url": "https://github.com/lance-lii/polyfence/issues"
+  },
+  "type": "module",
+  "bin": {
+    "polyfence": "bin/polyfence.cjs"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "prepublishOnly": "npm test && npm run bundle",
+    "bundle": "esbuild src/cli.ts --bundle --platform=node --format=cjs --target=node20 --minify-syntax --outfile=bin/polyfence.cjs --log-level=warning"
+  },
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "antigravity",
+    "guardrails",
+    "policy",
+    "hooks",
+    "security",
+    "agentic-coding"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "smol-toml": "^1.9.1",
+    "typescript": "^5.7.0",
+    "yaml": "^2.6.0"
+  }
+}

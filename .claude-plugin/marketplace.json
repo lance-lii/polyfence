@@ -1,0 +1,14 @@
+{
+  "name": "polyfence",
+  "description": "Guardrails for AI coding agents: one policy for Claude Code, Codex, Gemini CLI and Antigravity.",
+  "owner": {
+    "name": "Lance Li"
+  },
+  "plugins": [
+    {
+      "name": "polyfence",
+      "source": "./",
+      "description": "One guardrail policy for every AI coding agent."
+    }
+  ]
+}
