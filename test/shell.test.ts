@@ -57,11 +57,20 @@ test('ignores comments', () => {
 test('collects redirect targets', () => {
   const [seg] = parseShell('echo hi > out.txt 2>&1 >> log.txt < in.txt');
   assert.deepEqual(seg.argv, ['echo', 'hi']);
-  assert.deepEqual(seg.redirects, ['out.txt', 'log.txt', 'in.txt']);
+  assert.deepEqual(seg.redirects, ['out.txt', 'log.txt']);
+  assert.deepEqual(seg.inputRedirects, ['in.txt']);
   const [seg2] = parseShell('cmd &> all.log');
   assert.deepEqual(seg2.redirects, ['all.log']);
+  assert.deepEqual(seg2.inputRedirects, []);
   const [seg3] = parseShell('cat <<< "hello"');
   assert.deepEqual(seg3.redirects, []);
+  assert.deepEqual(seg3.inputRedirects, []);
+  const [seg4] = parseShell('cmd 2> err.log');
+  assert.deepEqual(seg4.redirects, ['err.log']);
+  assert.deepEqual(seg4.inputRedirects, []);
+  const [seg5] = parseShell('cmd <> rw.txt');
+  assert.deepEqual(seg5.redirects, ['rw.txt']);
+  assert.deepEqual(seg5.inputRedirects, []);
 });
 
 test('extracts touched and written paths', () => {
@@ -76,6 +85,22 @@ test('extracts touched and written paths', () => {
   assert.deepEqual(w('dd if=/dev/zero of=disk.img'), ['disk.img']);
   assert.deepEqual(w('cat a > b'), ['b']);
   assert.deepEqual(w('cat a'), []);
+  // Input redirects are touched paths, not writes (#1).
+  assert.deepEqual(w('jq . < polyfence.yaml'), []);
+  assert.deepEqual(w('wc -l < .claude/settings.json'), []);
+  assert.deepEqual(w('echo x > polyfence.yaml'), ['polyfence.yaml']);
+  assert.deepEqual(w('cmd >> out.txt'), ['out.txt']);
+  assert.deepEqual(w('cmd &> all.log'), ['all.log']);
+  assert.deepEqual(w('cmd 2> err.log'), ['err.log']);
+  assert.deepEqual(w('cmd <> rw.txt'), ['rw.txt']);
+  const [inp] = parseShell('jq . < polyfence.yaml');
+  assert.deepEqual(segmentPaths(inp), ['.', 'polyfence.yaml']);
+  assert.deepEqual(segmentWrites(inp), []);
+  assert.deepEqual(inp.inputRedirects, ['polyfence.yaml']);
+  assert.deepEqual(inp.redirects, []);
+  const [mixed] = parseShell('cmd > out.txt < in.txt');
+  assert.deepEqual(segmentWrites(mixed), ['out.txt']);
+  assert.deepEqual(segmentPaths(mixed), ['out.txt', 'in.txt']);
 });
 
 test('survives hostile input', () => {

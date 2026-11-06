@@ -14,8 +14,10 @@ export interface Segment {
   argv: string[];
   /** argv exactly as parsed. */
   rawArgv: string[];
-  /** Targets of `>`, `>>`, `<` and friends. */
+  /** Targets of output redirects (`>`, `>>`, `&>`, `2>`, `<>`, ...). */
   redirects: string[];
+  /** Targets of input redirects (`<`). Kept out of writes but still in paths. */
+  inputRedirects: string[];
   /** argv joined by single spaces; this is what `command` patterns match. */
   text: string;
 }

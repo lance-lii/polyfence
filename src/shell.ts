@@ -17,7 +17,10 @@ const DROP_SEGMENT = new Set(['for', 'case', 'select', 'function', 'fi', 'done',
 
 interface RawSeg {
   words: string[];
+  /** Output redirect targets (`>`, `>>`, `&>`, `<>`, ...). */
   redirects: string[];
+  /** Input redirect targets (`<`). */
+  inputRedirects: string[];
 }
 
 interface Heredoc {
@@ -49,9 +52,10 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
   const heredocs: Heredoc[] = [];
   let words: string[] = [];
   let redirects: string[] = [];
+  let inputRedirects: string[] = [];
   let word = '';
   let inWord = false;
-  let pending: 'redirect' | 'heredoc' | 'herestring' | null = null;
+  let pending: 'redirect' | 'input-redirect' | 'heredoc' | 'herestring' | null = null;
   let heredocStrip = false;
   const n = src.length;
   let i = 0;
@@ -59,6 +63,7 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
   const endWord = () => {
     if (!inWord) return;
     if (pending === 'redirect') redirects.push(word);
+    else if (pending === 'input-redirect') inputRedirects.push(word);
     else if (pending === 'heredoc') heredocs.push({ delim: word, strip: heredocStrip });
     else if (pending !== 'herestring') words.push(word);
     pending = null;
@@ -67,9 +72,12 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
   };
   const endSeg = () => {
     endWord();
-    if (words.length || redirects.length) segs.push({ words, redirects });
+    if (words.length || redirects.length || inputRedirects.length) {
+      segs.push({ words, redirects, inputRedirects });
+    }
     words = [];
     redirects = [];
+    inputRedirects = [];
     pending = null;
   };
   const substitution = (start: number): number => {
@@ -198,8 +206,10 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
         pending = 'heredoc';
         continue;
       }
+      // `<>` opens read/write — treat as an output redirect so writePath still fires.
+      const readWrite = c === '<' && src[i + 1] === '>';
       i++;
-      if (src[i] === '>' || src[i] === '|' || (c === '<' && src[i] === '>')) i++;
+      if (src[i] === '>' || src[i] === '|' || readWrite) i++;
       if (src[i] === '&') {
         i++;
         let j = i;
@@ -209,7 +219,7 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
           continue;
         }
       }
-      pending = 'redirect';
+      pending = c === '<' && !readWrite ? 'input-redirect' : 'redirect';
       continue;
     }
 
@@ -350,8 +360,14 @@ function stripGitGlobals(args: string[]): string[] {
 function normalize(raw: RawSeg): Segment | undefined {
   if (raw.words.length && DROP_SEGMENT.has(raw.words[0])) return undefined;
   const argv = stripWrappers(raw.words);
-  if (!argv.length && !raw.redirects.length) return undefined;
-  return { argv, rawArgv: raw.words, redirects: raw.redirects, text: argv.join(' ') };
+  if (!argv.length && !raw.redirects.length && !raw.inputRedirects.length) return undefined;
+  return {
+    argv,
+    rawArgv: raw.words,
+    redirects: raw.redirects,
+    inputRedirects: raw.inputRedirects,
+    text: argv.join(' '),
+  };
 }
 
 /** Script text run by `bash -c "..."`, `sh -lc '...'` or `eval ...`, if any. */
@@ -382,6 +398,7 @@ export function segmentPaths(seg: Segment): string[] {
     if (value && !URL_RE.test(value) && !DEVICE.test(value)) out.push(value);
   }
   for (const r of seg.redirects) if (!DEVICE.test(r)) out.push(r);
+  for (const r of seg.inputRedirects) if (!DEVICE.test(r)) out.push(r);
   return out;
 }
 
@@ -393,7 +410,7 @@ const MUTATORS_ALL = new Set(['rm', 'rmdir', 'unlink', 'shred', 'mv', 'tee', 'tr
 const MUTATORS_LAST = new Set(['cp', 'ln', 'install', 'rsync', 'scp']);
 const MUTATORS_SKIP_FIRST = new Set(['chmod', 'chown', 'chgrp']);
 
-/** Paths a segment modifies: redirect targets plus arguments of well-known mutating commands. */
+/** Paths a segment modifies: output-redirect targets plus arguments of well-known mutating commands. */
 export function segmentWrites(seg: Segment): string[] {
   const out = seg.redirects.filter((r) => !DEVICE.test(r));
   const [cmd, ...rest] = seg.argv;

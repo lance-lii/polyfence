@@ -56,6 +56,7 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['curl -s https://api.example.com | jq .', 'defer'],
   // secrets through the shell
   ['cat .env', 'deny', 'protect-secrets'],
+  ['cat < .env', 'deny', 'protect-secrets'],
   ['grep -r TOKEN . && cat config/.env.production', 'deny', 'protect-secrets'],
   ['cp .env.example .env.local', 'deny', 'protect-secrets'],
   ['cat .env.example', 'defer'],
@@ -67,6 +68,10 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['rm polyfence.yaml', 'deny', 'protect-guardrails'],
   [`sed -i 's/deny/allow/' polyfence.yaml`, 'deny', 'protect-guardrails'],
   ['cat polyfence.yaml', 'defer'],
+  // reading guardrails via stdin redirect is fine; writing is not (#1)
+  ['jq . < polyfence.yaml', 'defer'],
+  ['wc -l < .claude/settings.json', 'defer'],
+  ['cat < polyfence.yaml', 'defer'],
   // outside workspace
   ['echo x > ../other/file', 'ask', 'ask-outside-workspace'],
   ['echo x > /tmp/scratch.txt', 'defer'],
