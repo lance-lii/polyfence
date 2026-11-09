@@ -59,7 +59,7 @@ const recommended: PresetRule[] = [
     reason: 'Recursive delete of /, ~, $HOME, . or * is blocked. Delete specific paths instead.',
     match: {
       command: [
-        '/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/',
+        '/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\$\\{HOME\\}|\\$\\{HOME\\}\\/|\\$\\{HOME\\}\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/',
       ],
     },
   },

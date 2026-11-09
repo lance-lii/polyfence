@@ -21,6 +21,9 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['rm -rf .', 'deny', 'no-rm-rf-root'],
   ['rm -rf *', 'deny', 'no-rm-rf-root'],
   ['sudo rm -r --no-preserve-root /', 'deny', 'no-rm-rf-root'],
+  ['rm -rf ${HOME}', 'deny', 'no-rm-rf-root'],
+  ['rm -rf "${HOME}/"', 'deny', 'no-rm-rf-root'],
+  ['rm -rf ${BUILD_DIR}/out', 'defer'],
   ['rm -rf ./build dist', 'defer'],
   ['rm -rf node_modules', 'defer'],
   ['rm file.txt', 'defer'],
@@ -73,6 +76,7 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['cat .env.example', 'defer'],
   ['cat ~/.ssh/id_ed25519', 'deny', 'protect-secrets'],
   ['cat ~/.ssh/id_ed25519.pub', 'defer'],
+  ['cat ${HOME}/.aws/credentials', 'deny', 'protect-secrets'],
   ['aws configure list --profile x', 'defer'],
   // guardrail tampering
   ['echo "{}" > .claude/settings.json', 'deny', 'protect-guardrails'],

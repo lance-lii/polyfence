@@ -113,9 +113,10 @@ export function pathGlobSource(glob: string): string {
 }
 
 export function expandHome(p: string): string {
-  if (p === '~') return os.homedir();
+  if (p === '~' || p === '$HOME' || p === '${HOME}') return os.homedir();
   if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
   if (p.startsWith('$HOME/')) return path.join(os.homedir(), p.slice(6));
+  if (p.startsWith('${HOME}/')) return path.join(os.homedir(), p.slice(8));
   return p;
 }
 
