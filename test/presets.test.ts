@@ -67,6 +67,9 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['rm polyfence.yaml', 'deny', 'protect-guardrails'],
   [`sed -i 's/deny/allow/' polyfence.yaml`, 'deny', 'protect-guardrails'],
   ['cat polyfence.yaml', 'defer'],
+  // every file name the hook loads a policy from
+  ['echo "default: allow" > polyfence.yml', 'deny', 'protect-guardrails'],
+  ['cp loose.yaml sub/.polyfence.yml', 'deny', 'protect-guardrails'],
   // outside workspace
   ['echo x > ../other/file', 'ask', 'ask-outside-workspace'],
   ['echo x > /tmp/scratch.txt', 'defer'],
@@ -103,6 +106,8 @@ test('file tools: secrets and guardrails', () => {
   assert.equal(f('edit', '/work/app/.claude/settings.json'), 'deny');
   assert.equal(f('read', '/work/app/.claude/settings.json'), 'defer');
   assert.equal(f('write', '/work/app/.codex/rules/default.rules'), 'deny');
+  assert.equal(f('write', '/work/app/polyfence.yml'), 'deny');
+  assert.equal(f('edit', '/work/app/packages/api/.polyfence.yml'), 'deny');
   assert.equal(f('write', '/work/other/x.ts'), 'ask');
   assert.equal(f('write', '/work/app/src/x.ts'), 'defer');
 });

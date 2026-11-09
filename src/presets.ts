@@ -31,6 +31,8 @@ const SECRET_PATHS = [
 const GUARDRAIL_FILES = [
   'polyfence.yaml',
   '.polyfence.yaml',
+  'polyfence.yml',
+  '.polyfence.yml',
   '.polyfence/**',
   '~/.config/polyfence/**',
   '.claude/settings.json',
