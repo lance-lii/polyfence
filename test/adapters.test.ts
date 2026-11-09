@@ -64,6 +64,17 @@ test('codex: ask degrades to deny with an explanation, or defers', () => {
   assert.equal(deferred.reply.stdout, undefined);
 });
 
+test('allow: native in Claude and Gemini, left to Codex, which rejects a bare allow', () => {
+  const p = buildPolicy({ rules: [{ id: 'tests', match: { command: 'npm test *' }, decision: 'allow' }] }, { root: ROOT });
+  const claude = run('claude', { tool_name: 'Bash', tool_input: { command: 'npm test' }, cwd: ROOT }, p);
+  assert.equal(JSON.parse(claude.reply.stdout!).hookSpecificOutput.permissionDecision, 'allow');
+  const codex = run('codex', { tool_name: 'Bash', tool_input: { command: 'npm test' }, cwd: ROOT, turn_id: 't' }, p);
+  assert.equal(codex.reply.stdout, undefined);
+  const gemini = run('gemini', { tool_name: 'run_shell_command', tool_input: { command: 'npm test' }, cwd: ROOT }, p);
+  assert.equal(JSON.parse(gemini.reply.stdout!).decision, 'allow');
+  for (const r of [claude, codex, gemini]) assert.equal(r.reply.exitCode, 0, 'the JSON decides, not the exit code');
+});
+
 test('patchPaths', () => {
   const p = patchPaths('*** Begin Patch\n*** Add File: a.ts\n+x\n*** Update File: b.ts\n*** Move to: c.ts\n*** Delete File: d.ts\n*** End Patch');
   assert.deepEqual(p.paths, ['a.ts', 'b.ts', 'c.ts', 'd.ts']);
