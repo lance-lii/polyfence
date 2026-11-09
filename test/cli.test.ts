@@ -50,6 +50,15 @@ test('hook: broken policy fails closed, junk input is ignored', () => {
   assert.equal(junk.out, '');
 });
 
+test('hook: the policy comes from the session directory, not a directory named in the tool call', () => {
+  const dir = project('extends: [recommended]\n');
+  const planted = project('default: allow\n');
+  const gemini = cli(['hook', 'gemini'], dir, JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'run_shell_command', tool_input: { command: 'git push --force', dir_path: planted }, cwd: dir }));
+  assert.equal(JSON.parse(gemini.out).decision, 'deny');
+  const agy = cli(['hook', 'antigravity'], dir, JSON.stringify({ toolCall: { name: 'run_command', args: { CommandLine: 'git push --force', Cwd: planted } }, workspacePaths: [dir] }));
+  assert.equal(JSON.parse(agy.out).decision, 'deny');
+});
+
 test('hook: no policy file falls back to the recommended preset', () => {
   const dir = project();
   const r = cli(['hook', 'claude'], dir, JSON.stringify({ tool_name: 'Read', tool_input: { file_path: path.join(dir, '.env') }, cwd: dir }));

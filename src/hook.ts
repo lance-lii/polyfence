@@ -25,13 +25,14 @@ export function runHook(stdin: string, agentArg?: AgentName): HookReply {
   }
   const adapter = ADAPTERS[agentArg ?? detectAgent(input)];
   const call = adapter.toCall(input);
+  const workspace = adapter.workspace(input);
 
   let policy: Policy;
   try {
-    policy = policyFor(call.cwd);
+    policy = policyFor(workspace);
   } catch (err) {
     const verdict: Verdict = { outcome: 'deny', reason: `policy error, failing closed: ${(err as Error).message}`, matched: [] };
-    return adapter.reply(verdict, builtinPolicy(call.cwd), call);
+    return adapter.reply(verdict, builtinPolicy(workspace), call);
   }
 
   let verdict: Verdict;
