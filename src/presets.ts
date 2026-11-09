@@ -88,7 +88,8 @@ const recommended: PresetRule[] = [
     decision: 'deny',
     reason: 'Skipping git hooks hides failing checks. Fix the failure instead of using --no-verify.',
     match: {
-      command: ['/^git\\s+(?:commit|push|merge|rebase|am|cherry-pick)\\b.*\\s--no-verify(?:\\s|$)/', '/^git\\s+commit\\b(?:.*\\s)?-[a-zA-Z]*n[a-zA-Z]*(?:\\s|$)/'],
+      // git also accepts unambiguous abbreviations: --no-veri and --no-verif mean --no-verify.
+      command: ['/^git\\s+(?:commit|push|merge|rebase|am|cherry-pick)\\b.*\\s--no-veri(?:fy?)?(?:\\s|$)/', '/^git\\s+commit\\b(?:.*\\s)?-[a-zA-Z]*n[a-zA-Z]*(?:\\s|$)/'],
     },
   },
   {

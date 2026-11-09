@@ -106,7 +106,7 @@ Run `polyfence presets` for the full list.
 | `no-disk-wipe` | deny | `mkfs`, `dd of=/dev/...`, `diskutil erase*` |
 | `no-force-push` | deny | `git push --force`, `-f`, `+refspec` |
 | `ask-force-with-lease` | ask | `git push --force-with-lease` |
-| `no-hook-bypass` | deny | `git commit --no-verify`, `-n` |
+| `no-hook-bypass` | deny | `git commit --no-verify` (also abbreviated, e.g. `--no-veri`), `-n` |
 | `no-husky-bypass` | deny | `HUSKY=0 git ...` |
 | `no-hooks-path-override` | deny | `git -c core.hooksPath=...`, `GIT_CONFIG_KEY_0=core.hooksPath` |
 | `ask-destructive-git` | ask | `reset --hard`, `clean -f`, `checkout -- .`, `branch -D`, remote branch deletes |
