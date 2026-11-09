@@ -36,6 +36,16 @@ test('recurses into bash -c, eval, $(...) and backticks', () => {
   assert.ok(!texts('echo $((1 + 2))').some((t) => t.startsWith('1')));
 });
 
+test('finds the -c script after shell options', () => {
+  assert.ok(texts(`bash -o pipefail -c 'git push --force'`).includes('git push --force'));
+  assert.ok(texts(`bash -eo pipefail -c 'rm -rf ~'`).includes('rm -rf ~'));
+  assert.ok(texts(`bash -O extglob +o posix --rcfile rc -c 'ls x'`).includes('ls x'));
+  assert.ok(texts(`sh +e -c 'ls x'`).includes('ls x'));
+  assert.ok(texts(`sh -c -e 'ls x'`).includes('ls x'));
+  assert.ok(texts(`sh -c -- 'ls x'`).includes('ls x'));
+  assert.deepEqual(texts('bash -o pipefail build.sh'), ['bash -o pipefail build.sh']);
+});
+
 test('skips heredoc bodies', () => {
   const src = `git commit -m "$(cat <<'EOF'
 rm -rf / is now handled (closes #12)
