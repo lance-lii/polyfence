@@ -23,11 +23,17 @@ export interface Adapter {
   /** Can `ask` be expressed natively from a hook? */
   nativeAsk: boolean;
   toCall(input: Json): ToolCall;
+  /**
+   * The session's directory, where the policy is looked up. Never a directory from the
+   * tool call's own arguments: the model chooses those, and could point them at a policy it wrote.
+   */
+  workspace(input: Json): string;
   reply(verdict: Verdict, policy: Policy, call?: ToolCall): HookReply;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length ? v : undefined);
 const obj = (v: unknown): Json => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Json) : {});
+const sessionCwd = (input: Json): string => str(input.cwd) ?? process.cwd();
 
 const PATH_KEYS = /^(file_?path|filePath|path|paths|filename|target_?file|TargetFile|absolute_?path|AbsolutePath|notebook_path|dir_?path|DirectoryPath|directory|SearchPath|FilePath|source|destination)$/i;
 
@@ -110,6 +116,7 @@ const claude: Adapter = {
   name: 'claude',
   nativeAsk: true,
   toCall: (input) => claudeLikeCall('claude', input),
+  workspace: sessionCwd,
   reply: (verdict) => claudeReply(verdict),
 };
 
@@ -173,6 +180,7 @@ const codex: Adapter = {
   name: 'codex',
   nativeAsk: false,
   toCall: codexCall,
+  workspace: sessionCwd,
   reply: (verdict, policy) => {
     const v = degradeAsk(verdict, policy);
     // Codex hooks can deny; allow/ask are left to Codex's own approval flow and rules.
@@ -220,6 +228,7 @@ const gemini: Adapter = {
   name: 'gemini',
   nativeAsk: false,
   toCall: geminiCall,
+  workspace: sessionCwd,
   reply: (verdict, policy) => {
     const v = degradeAsk(verdict, policy);
     if (v.outcome === 'deny') return { exitCode: 0, stdout: JSON.stringify({ decision: 'deny', reason: message(v) }) };
@@ -264,6 +273,7 @@ const antigravity: Adapter = {
   name: 'antigravity',
   nativeAsk: true,
   toCall: agyCall,
+  workspace: (input) => str((Array.isArray(input.workspacePaths) ? input.workspacePaths : [])[0]) ?? sessionCwd(input),
   reply: (verdict, _policy, call) => {
     // Antigravity fails closed on a missing decision, so always answer. For `defer`
     // we mirror its defaults: review shell commands and writes, let reads through.

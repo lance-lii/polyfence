@@ -237,7 +237,7 @@ When a call matches more than one rule, the most restrictive one wins. To make a
 
 ### Where the policy comes from
 
-The hook looks for `polyfence.yaml` (or `.polyfence.yaml`) from the agent's working directory upward. If there isn't one, it uses `~/.config/polyfence/polyfence.yaml`. If that doesn't exist either, it falls back to the built-in `recommended` preset.
+The hook looks for `polyfence.yaml` (or `.polyfence.yaml`, `polyfence.yml`, `.polyfence.yml`) from the session's working directory upward (for Antigravity, the first workspace folder). A directory named inside the tool call, such as Gemini's `dir_path` or Antigravity's `Cwd`, is never used to find the policy, because the agent chooses it. If there isn't one, it uses `~/.config/polyfence/polyfence.yaml`. If that doesn't exist either, it falls back to the built-in `recommended` preset.
 
 ## Guardrails in CI
 
