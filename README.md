@@ -265,6 +265,13 @@ jobs:
 
 **Is this a sandbox?** No. Polyfence decides which tool calls an agent may make. It doesn't isolate processes. A determined program can always find a way past pattern rules (writing a script and then running it, for example). Use polyfence to keep well-meaning agents away from foot-guns, and run untrusted work in a container or VM as well.
 
+**What can't the rules see?** Anything that is only decided when the command runs. These still get through today:
+- Commands built at run time: variables (`x=git; $x push -f`), brace expansion (`{git,push} --force`), git aliases (`git -c alias.p='push -f' p`), and globs the shell expands into protected files (`cat .env*`).
+- Code run by another interpreter: `python -c`, `node -e`, or a script the agent writes and then runs.
+- Shell input that isn't a download or a heredoc the shell reads, such as `echo 'git push -f' | bash` or `cat <<EOF | sh`.
+- `cd` inside one command (`cd ~/.aws && cat credentials`), and wrapper options polyfence doesn't parse: `find -exec`, `env -S`, `sudo -iu user` (still asked about as `sudo`).
+- Writes it doesn't model: `curl -O` and plain `wget URL` (named after the URL), `curl --output-dir`, `git checkout <ref> -- <file>`, unpacked archives, and persistent settings such as `git config core.hooksPath`.
+
 **Does it phone home?** No. It reads your policy, makes a decision locally and appends one line to a local log.
 
 **Will it slow my agent down?** A hook call takes about 30 ms. Agents run hooks before each tool call, and the model's own latency is far larger.
