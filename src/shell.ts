@@ -18,11 +18,18 @@ const DROP_SEGMENT = new Set(['for', 'case', 'select', 'function', 'fi', 'done',
 interface RawSeg {
   words: string[];
   redirects: string[];
+  /** Heredoc bodies and herestrings fed to the command. */
+  stdin: string[];
 }
 
 interface Heredoc {
   delim: string;
   strip: boolean;
+  /** Any quoting in the delimiter (`'EOF'`, `\EOF`) makes the body literal. */
+  quoted?: boolean;
+  /** stdin of the segment the heredoc feeds. */
+  stdin?: string[];
+  body?: string;
 }
 
 export function parseShell(src: string): Segment[] {
@@ -38,8 +45,7 @@ function collect(src: string, depth: number, out: Segment[]): void {
     const seg = normalize(raw);
     if (!seg) continue;
     out.push(seg);
-    const inner = innerScript(seg.argv);
-    if (inner !== undefined) collect(inner, depth + 1, out);
+    for (const inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out);
   }
   for (const n of nested) collect(n, depth + 1, out);
 }
@@ -49,8 +55,10 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
   const heredocs: Heredoc[] = [];
   let words: string[] = [];
   let redirects: string[] = [];
+  let stdin: string[] = [];
   let word = '';
   let inWord = false;
+  let quoted = false;
   let pending: 'redirect' | 'heredoc' | 'herestring' | null = null;
   let heredocStrip = false;
   const n = src.length;
@@ -59,17 +67,20 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
   const endWord = () => {
     if (!inWord) return;
     if (pending === 'redirect') redirects.push(word);
-    else if (pending === 'heredoc') heredocs.push({ delim: word, strip: heredocStrip });
-    else if (pending !== 'herestring') words.push(word);
+    else if (pending === 'heredoc') heredocs.push({ delim: word, strip: heredocStrip, quoted, stdin });
+    else if (pending === 'herestring') stdin.push(word);
+    else words.push(word);
     pending = null;
     word = '';
     inWord = false;
+    quoted = false;
   };
   const endSeg = () => {
     endWord();
-    if (words.length || redirects.length) segs.push({ words, redirects });
+    if (words.length || redirects.length) segs.push({ words, redirects, stdin });
     words = [];
     redirects = [];
+    stdin = [];
     pending = null;
   };
   const substitution = (start: number): number => {
@@ -88,6 +99,7 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
       }
       if (i + 1 < n) word += src[i + 1];
       inWord = true;
+      quoted = true;
       i += 2;
       continue;
     }
@@ -96,11 +108,13 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
       const stop = end === -1 ? n : end;
       word += src.slice(i + 1, stop);
       inWord = true;
+      quoted = true;
       i = stop + 1;
       continue;
     }
     if (c === '"') {
       inWord = true;
+      quoted = true;
       i++;
       while (i < n && src[i] !== '"') {
         if (src[i] === '\\' && i + 1 < n && '"\\$`\n'.includes(src[i + 1])) {
@@ -157,6 +171,10 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
       i++;
       if (heredocs.length) {
         i = skipHeredocs(src, i, heredocs);
+        for (const doc of heredocs) {
+          doc.stdin?.push(doc.body ?? '');
+          if (!doc.quoted) bodySubstitutions(doc.body ?? '', nested);
+        }
         heredocs.length = 0;
       }
       continue;
@@ -277,9 +295,11 @@ function readBacktick(src: string, open: number): [string, number] {
   return [src.slice(open + 1, i), Math.min(i + 1, src.length)];
 }
 
+/** Skips each heredoc body, keeping its text in `doc.body`. */
 function skipHeredocs(src: string, start: number, docs: Heredoc[]): number {
   let i = start;
   for (const doc of docs) {
+    const lines: string[] = [];
     while (i < src.length) {
       const nl = src.indexOf('\n', i);
       const end = nl === -1 ? src.length : nl;
@@ -287,9 +307,27 @@ function skipHeredocs(src: string, start: number, docs: Heredoc[]): number {
       if (doc.strip) line = line.replace(/^\t+/, '');
       i = end + 1;
       if (line.trim() === doc.delim) break;
+      lines.push(line);
     }
+    doc.body = lines.join('\n');
   }
   return Math.min(i, src.length);
+}
+
+/** `$(...)` and backticks in an unquoted heredoc body run while the shell expands it. */
+function bodySubstitutions(body: string, nested: string[]): void {
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === '\\') i++;
+    else if (body[i] === '$' && body[i + 1] === '(') {
+      const [inner, next] = readParen(body, i + 1);
+      if (!inner.startsWith('(')) nested.push(inner); // `$((...))` is arithmetic
+      i = next - 1;
+    } else if (body[i] === '`') {
+      const [inner, next] = readBacktick(body, i);
+      nested.push(inner);
+      i = next - 1;
+    }
+  }
 }
 
 function basename(word: string): string {
@@ -357,14 +395,16 @@ function normalize(raw: RawSeg): Segment | undefined {
 const SHELL_VALUE_FLAGS = new Set(['--rcfile', '--init-file']);
 
 /**
- * Script text run by `bash -c "..."`, `sh -lc '...'` or `eval ...`, if any. Options come
- * first (`-o pipefail`, `+e`, `--norc`); with `-c` the first operand is the script.
+ * Scripts run by `bash -c "..."`, `sh -lc '...'`, `eval ...` or a shell reading a heredoc.
+ * Options come first (`-o pipefail`, `+e`, `--norc`). With `-c` the first operand is the
+ * script; with `-s`, or with no operand at all, the shell runs its stdin.
  */
-function innerScript(argv: string[]): string | undefined {
-  if (!argv.length) return undefined;
-  if (argv[0] === 'eval') return argv.slice(1).join(' ');
-  if (!SHELLS.has(argv[0])) return undefined;
+function innerScript(argv: string[], stdin: string[]): string[] {
+  if (!argv.length) return [];
+  if (argv[0] === 'eval') return [argv.slice(1).join(' ')];
+  if (!SHELLS.has(argv[0])) return [];
   let command = false;
+  let fromStdin = false;
   let i = 1;
   for (; i < argv.length; i++) {
     const a = argv[i];
@@ -374,12 +414,14 @@ function innerScript(argv: string[]): string | undefined {
     }
     if (/^[-+][a-zA-Z]+$/.test(a)) {
       if (a[0] === '-' && a.includes('c')) command = true;
+      if (a[0] === '-' && a.includes('s')) fromStdin = true;
       if (/[oO]/.test(a)) i++; // `-o pipefail`, `+O extglob`: the option name is the next word
     } else if (a.startsWith('--')) {
       if (SHELL_VALUE_FLAGS.has(a)) i++;
     } else break;
   }
-  return command ? argv[i] : undefined;
+  if (command) return i < argv.length ? [argv[i]] : [];
+  return fromStdin || i >= argv.length ? stdin : [];
 }
 
 const DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/;

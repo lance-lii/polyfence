@@ -35,6 +35,12 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   [`sh +e -c 'rm -rf ~'`, 'deny', 'no-rm-rf-root'],
   [`sh -c -e 'rm -rf ~'`, 'deny', 'no-rm-rf-root'],
   [`bash -o pipefail ./push-force.sh`, 'defer'],
+  // a heredoc or herestring that a shell runs, and substitutions in unquoted heredocs
+  ["bash <<'EOF'\ngit push --force\nEOF", 'deny', 'no-force-push'],
+  [`sh <<< 'rm -rf ~'`, 'deny', 'no-rm-rf-root'],
+  ['cat <<EOF > notes.txt\n$(git push --force)\nEOF', 'deny', 'no-force-push'],
+  ["cat <<'EOF' > notes.txt\n$(git push --force) is now blocked\nEOF", 'defer'],
+  ['bash ./deploy.sh <<EOF\ngit push --force\nEOF', 'defer'],
   ['git push --force-with-lease', 'ask', 'ask-force-with-lease'],
   ['git push origin main', 'defer'],
   ['git push --follow-tags', 'defer'],
