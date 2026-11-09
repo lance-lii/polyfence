@@ -46,6 +46,24 @@ test('finds the -c script after shell options', () => {
   assert.deepEqual(texts('bash -o pipefail build.sh'), ['bash -o pipefail build.sh']);
 });
 
+test('parses heredocs and herestrings that a shell runs', () => {
+  assert.ok(texts("bash <<'EOF'\nls -la\nEOF").includes('ls -la'));
+  assert.ok(texts('sh -s -- prod <<EOF\nmake deploy\nEOF').includes('make deploy'));
+  assert.ok(texts('bash <<EOF | tee log\nmake\nEOF').includes('make'));
+  assert.ok(texts(`bash <<< 'make test'`).includes('make test'));
+  assert.deepEqual(texts('bash run.sh <<EOF\nmake\nEOF'), ['bash run.sh']);
+  assert.deepEqual(texts('python3 - <<EOF\nmake\nEOF'), ['python3 -']);
+});
+
+test('finds command substitutions in unquoted heredoc bodies only', () => {
+  const t = texts('cat <<EOF > out.txt\nuser: $(whoami), host: `hostname`, cost: \\$(none)\nEOF');
+  assert.ok(t.includes('whoami') && t.includes('hostname'), JSON.stringify(t));
+  assert.ok(!t.includes('none'), JSON.stringify(t));
+  for (const delim of [`'EOF'`, `"EOF"`, '\\EOF', `E'O'F`]) {
+    assert.deepEqual(texts(`cat <<${delim}\n$(whoami)\nEOF`), ['cat'], delim);
+  }
+});
+
 test('skips heredoc bodies', () => {
   const src = `git commit -m "$(cat <<'EOF'
 rm -rf / is now handled (closes #12)
