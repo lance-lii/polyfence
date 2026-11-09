@@ -5612,10 +5612,10 @@ function collect(src, depth, out) {
   for (let n of nested) collect(n, depth + 1, out);
 }
 function tokenize(src, nested) {
-  let segs = [], heredocs = [], words = [], redirects = [], stdin = [], word = "", inWord = !1, quoted = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
-    inWord && (pending === "redirect" ? redirects.push(word) : pending === "heredoc" ? heredocs.push({ delim: word, strip: heredocStrip, quoted, stdin }) : pending === "herestring" ? stdin.push(word) : words.push(word), pending = null, word = "", inWord = !1, quoted = !1);
+  let segs = [], heredocs = [], words = [], redirects = [], inputRedirects = [], stdin = [], word = "", inWord = !1, quoted = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
+    inWord && (pending === "redirect" ? redirects.push(word) : pending === "input-redirect" ? inputRedirects.push(word) : pending === "heredoc" ? heredocs.push({ delim: word, strip: heredocStrip, quoted, stdin }) : pending === "herestring" ? stdin.push(word) : words.push(word), pending = null, word = "", inWord = !1, quoted = !1);
   }, endSeg = () => {
-    endWord(), (words.length || redirects.length) && segs.push({ words, redirects, stdin }), words = [], redirects = [], stdin = [], pending = null;
+    endWord(), (words.length || redirects.length || inputRedirects.length) && segs.push({ words, redirects, inputRedirects, stdin }), words = [], redirects = [], inputRedirects = [], stdin = [], pending = null;
   }, substitution = (start) => {
     let [inner, next] = readParen(src, start);
     return inner.startsWith("(") || nested.push(inner), next;
@@ -5717,7 +5717,8 @@ function tokenize(src, nested) {
         i += 2, heredocStrip = src[i] === "-", heredocStrip && i++, pending = "heredoc";
         continue;
       }
-      if (i++, (src[i] === ">" || src[i] === "|" || c2 === "<" && src[i] === ">") && i++, src[i] === "&") {
+      let readWrite = c2 === "<" && src[i + 1] === ">";
+      if (i++, (src[i] === ">" || src[i] === "|" || readWrite) && i++, src[i] === "&") {
         i++;
         let j = i;
         for (; j < n && /[0-9-]/.test(src[j]); ) j++;
@@ -5726,7 +5727,7 @@ function tokenize(src, nested) {
           continue;
         }
       }
-      pending = "redirect";
+      pending = c2 === "<" && !readWrite ? "input-redirect" : "redirect";
       continue;
     }
     word += c2, inWord = !0, i++;
@@ -5861,8 +5862,14 @@ function stripGitGlobals(args) {
 function normalize(raw) {
   if (raw.words.length && DROP_SEGMENT.has(raw.words[0])) return;
   let argv = stripWrappers(raw.words);
-  if (!(!argv.length && !raw.redirects.length))
-    return { argv, rawArgv: raw.words, redirects: raw.redirects, text: argv.join(" ") };
+  if (!(!argv.length && !raw.redirects.length && !raw.inputRedirects.length))
+    return {
+      argv,
+      rawArgv: raw.words,
+      redirects: raw.redirects,
+      inputRedirects: raw.inputRedirects,
+      text: argv.join(" ")
+    };
 }
 var SHELL_VALUE_FLAGS = /* @__PURE__ */ new Set(["--rcfile", "--init-file"]);
 function innerScript(argv, stdin) {
@@ -5897,6 +5904,7 @@ function segmentPaths(seg) {
     value && !URL_RE.test(value) && !DEVICE.test(value) && out.push(value);
   }
   for (let r of seg.redirects) DEVICE.test(r) || out.push(r);
+  for (let r of seg.inputRedirects) DEVICE.test(r) || out.push(r);
   return out;
 }
 function segmentUrls(seg) {
