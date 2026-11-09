@@ -98,6 +98,15 @@ const recommended: PresetRule[] = [
     match: { commandLine: ['/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/'] },
   },
   {
+    id: 'no-hooks-path-override',
+    decision: 'deny',
+    reason: 'Pointing core.hooksPath elsewhere skips the repository hooks. Fix the failing check instead.',
+    // git config keys ignore case; `command` patterns never see `git -c`, so match the raw line.
+    match: {
+      commandLine: ['/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)core\\.hookspath\\s*=/i', '/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=[\'"]*core\\.hookspath\\b/i'],
+    },
+  },
+  {
     id: 'ask-destructive-git',
     decision: 'ask',
     reason: 'This git command can throw away uncommitted or unpushed work.',
