@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { regexLiteral } from './patterns.js';
 import { PRESETS } from './presets.js';
 import { AGENTS, TOOL_KINDS, type MatchSpec, type Policy, type PolicyTest, type Rule } from './types.js';
 
@@ -65,18 +66,15 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function strList(v: unknown, where: string, file?: string): string[] | undefined {
+function strList(v: unknown, where: string, file?: string, paths = false): string[] | undefined {
   if (v === undefined) return undefined;
   const list = Array.isArray(v) ? v : [v];
   for (const item of list) {
     if (typeof item !== 'string' || !item) throw new PolicyError(`${where} must be a string or a list of strings`, file);
-    const m = /^!?\/(.+)\/([a-z]*)$/s.exec(item);
-    if (m) {
-      try {
-        new RegExp(m[1], m[2]);
-      } catch (err) {
-        throw new PolicyError(`${where}: bad regex ${item}: ${(err as Error).message}`, file);
-      }
+    try {
+      regexLiteral(item.startsWith('!') ? item.slice(1) : item, paths);
+    } catch (err) {
+      throw new PolicyError(`${where}: bad regex ${item}: ${(err as Error).message}`, file);
     }
   }
   return list as string[];
@@ -115,7 +113,7 @@ function parseMatch(raw: unknown, where: string, file?: string): MatchSpec {
     match.agent = agents as MatchSpec['agent'];
   }
   for (const key of ['rawTool', 'command', 'commandLine', 'path', 'writePath', 'url'] as const) {
-    const list = strList(raw[key], `${where}.match.${key}`, file);
+    const list = strList(raw[key], `${where}.match.${key}`, file, key === 'path' || key === 'writePath');
     if (list) match[key] = list;
   }
   if (raw.outsideWorkspace !== undefined) {

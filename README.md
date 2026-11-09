@@ -234,7 +234,7 @@ tests:
 | `writePath` | only paths the call modifies: write/edit tools, redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`/`chmod`... | same as `path` |
 | `url` | `WebFetch`-style URLs, plus URLs in shell arguments | anchored, case-insensitive |
 
-Any pattern can be a regex instead: `/^git\s+push\b/i`. Start a pattern with `!` to exclude matches.
+Any pattern can be a regex instead: `/^git\s+push\b/i`. Start a pattern with `!` to exclude matches. In `path` and `writePath`, `/.../` counts as a regex only if it uses regex syntax (`\`, `^`, `$`, `|`, `(` or `[`), so `/etc/hosts` and `/etc/` are absolute paths.
 
 On macOS and Windows, where file names ignore case, path globs match in any case (`.env` also catches `cat .ENV`), and command names are compared in lower case (`GIT push -f` is `git push -f`). `commandLine` patterns are also tried against the command in lower case. Regex path patterns keep the flags you give them, and the native Codex and Gemini rules stay case-sensitive.
 
