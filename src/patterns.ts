@@ -13,6 +13,11 @@
 import os from 'node:os';
 import path from 'node:path';
 
+/** macOS and Windows file systems ignore case by default: there `.ENV` is `.env` and `GIT` runs git. */
+export const CASE_INSENSITIVE = process.platform === 'darwin' || process.platform === 'win32';
+const fold = (s: string) => (CASE_INSENSITIVE ? s.toLowerCase() : s);
+const PATH_FLAGS = CASE_INSENSITIVE ? 'i' : '';
+
 const cache = new Map<string, RegExp>();
 
 function escapeRe(s: string): string {
@@ -132,7 +137,7 @@ export function resolvePath(p: string, ctx: PathContext): string {
 }
 
 export function isInside(abs: string, root: string): boolean {
-  const rel = path.relative(root, abs);
+  const rel = path.relative(fold(root), fold(abs));
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
@@ -145,17 +150,17 @@ export function pathMatches(p: string, pattern: string, ctx: PathContext): boole
   if (glob.endsWith('/')) glob += '**';
   if (!glob.includes('/')) {
     // Like .gitignore: a bare name matches at any depth.
-    const re = memo('base', glob, () => new RegExp('^' + pathGlobSource(glob) + '$'));
+    const re = memo('base', glob, () => new RegExp('^' + pathGlobSource(glob) + '$', PATH_FLAGS));
     return re.test(abs.slice(abs.lastIndexOf('/') + 1));
   }
   const expanded = toPosix(expandHome(glob));
   if (expanded.startsWith('/')) {
-    return memo('abs', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$')).test(abs);
+    return memo('abs', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$', PATH_FLAGS)).test(abs);
   }
   const rootAbs = toPosix(path.resolve(ctx.root));
   if (!isInside(abs, rootAbs)) return false;
-  const rel = toPosix(path.relative(rootAbs, abs));
-  return memo('rel', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$')).test(rel);
+  const rel = toPosix(path.relative(fold(rootAbs), fold(abs)));
+  return memo('rel', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$', PATH_FLAGS)).test(rel);
 }
 
 /**
