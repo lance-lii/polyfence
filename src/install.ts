@@ -60,7 +60,8 @@ function hookEntries(agent: AgentName, command: string): { event: string; entrie
   const cmd = `${command} ${agent}`;
   switch (agent) {
     case 'claude':
-      return { event: 'PreToolUse', entries: [{ matcher: '*', hooks: [{ type: 'command', command: cmd, timeout: 10 }] }] };
+      // onFailure: block (Claude Code 2.1.295+) blocks the call when the hook can't start, crashes or times out.
+      return { event: 'PreToolUse', entries: [{ matcher: '*', hooks: [{ type: 'command', command: cmd, timeout: 10, onFailure: 'block' }] }] };
     case 'codex':
       return { event: 'PreToolUse', entries: [{ matcher: '.*', hooks: [{ type: 'command', command: cmd, timeout: 10 }] }] };
     case 'gemini':

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { agentFiles, install, isInstalled, uninstall } from '../src/install.js';
 import { builtinPolicy } from '../src/policy.js';
 import { AGENTS } from '../src/types.js';
@@ -30,12 +31,18 @@ test('install merges into existing Claude settings and is idempotent', () => {
   assert.equal(data.hooks.PreToolUse.length, 2);
   assert.deepEqual(data.hooks.PreToolUse[0], other);
   assert.equal(data.hooks.PreToolUse[1].hooks[0].command, 'polyfence hook claude');
+  assert.equal(data.hooks.PreToolUse[1].hooks[0].onFailure, 'block', 'a missing, crashing or stalled hook must block the call');
   assert.ok(isInstalled('claude', 'project', root));
 
   uninstall('claude', { scope: 'project', root, dryRun: false });
   const after = read(settings);
   assert.deepEqual(after.hooks.PreToolUse, [other]);
   assert.ok(!isInstalled('claude', 'project', root));
+});
+
+test('the Claude Code plugin hook fails closed too', () => {
+  const plugin = read(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../hooks/hooks.json'));
+  for (const entry of plugin.hooks.PreToolUse) for (const hook of entry.hooks) assert.equal(hook.onFailure, 'block');
 });
 
 test('install wires every agent and writes native rules', () => {
