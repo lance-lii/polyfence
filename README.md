@@ -61,7 +61,7 @@ Either way, every shell command, file read, write, edit and fetch from those age
 ```yaml
 # polyfence.yaml
 version: 1
-extends: [recommended]     # 16 built-in rules (see below)
+extends: [recommended]     # 17 built-in rules (see below)
 
 rules:
   - id: protect-prod-config
@@ -108,6 +108,7 @@ Run `polyfence presets` for the full list.
 | `ask-force-with-lease` | ask | `git push --force-with-lease` |
 | `no-hook-bypass` | deny | `git commit --no-verify`, `-n` |
 | `no-husky-bypass` | deny | `HUSKY=0 git ...` |
+| `no-hooks-path-override` | deny | `git -c core.hooksPath=...`, `GIT_CONFIG_KEY_0=core.hooksPath` |
 | `ask-destructive-git` | ask | `reset --hard`, `clean -f`, `checkout -- .`, `branch -D`, remote branch deletes |
 | `no-pipe-to-shell` | deny | `curl ... \| sh`, `bash <(curl ...)`, `sh -c "$(wget ...)"` |
 | `protect-secrets` | deny | `.env*` (not `.env.example`), `*.pem`, `*.key`, SSH keys, cloud credentials |

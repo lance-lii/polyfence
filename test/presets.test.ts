@@ -55,6 +55,11 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['git commit -am "fix things"', 'defer'],
   ['git push -n', 'defer'],
   ['HUSKY=0 git commit -m x', 'deny', 'no-husky-bypass'],
+  ['git -c core.hooksPath=/dev/null commit -m wip', 'deny', 'no-hooks-path-override'],
+  ['git -c core.hookspath= push origin main', 'deny', 'no-hooks-path-override'],
+  ['GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x', 'deny', 'no-hooks-path-override'],
+  ['git config --get core.hooksPath', 'defer'],
+  ['git -c user.name=bot commit -m x', 'defer'],
   // destructive git
   ['git reset --hard HEAD~2', 'ask', 'ask-destructive-git'],
   ['git clean -fdx', 'ask', 'ask-destructive-git'],
