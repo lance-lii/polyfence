@@ -45,6 +45,9 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['cat <<EOF > notes.txt\n$(git push --force)\nEOF', 'deny', 'no-force-push'],
   ["cat <<'EOF' > notes.txt\n$(git push --force) is now blocked\nEOF", 'defer'],
   ['bash ./deploy.sh <<EOF\ngit push --force\nEOF', 'defer'],
+  // a script read from a heredoc keeps the input/output redirect split (#1)
+  ["bash <<'EOF'\njq . < polyfence.yaml\nEOF", 'defer'],
+  ["bash <<'EOF'\necho '{}' > .claude/settings.json\nEOF", 'deny', 'protect-guardrails'],
   ['git push --force-with-lease', 'ask', 'ask-force-with-lease'],
   ['git push origin main', 'defer'],
   ['git push --follow-tags', 'defer'],
@@ -93,6 +96,7 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['source ./scripts/env.sh', 'defer'],
   // secrets through the shell
   ['cat .env', 'deny', 'protect-secrets'],
+  ['cat < .env', 'deny', 'protect-secrets'],
   ['grep -r TOKEN . && cat config/.env.production', 'deny', 'protect-secrets'],
   ['cp .env.example .env.local', 'deny', 'protect-secrets'],
   ['cat .env.example', 'defer'],
@@ -105,6 +109,10 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['rm polyfence.yaml', 'deny', 'protect-guardrails'],
   [`sed -i 's/deny/allow/' polyfence.yaml`, 'deny', 'protect-guardrails'],
   ['cat polyfence.yaml', 'defer'],
+  // reading guardrails via stdin redirect is fine; writing is not (#1)
+  ['jq . < polyfence.yaml', 'defer'],
+  ['wc -l < .claude/settings.json', 'defer'],
+  ['cat < polyfence.yaml', 'defer'],
   // every file name the hook loads a policy from
   ['echo "default: allow" > polyfence.yml', 'deny', 'protect-guardrails'],
   ['cp loose.yaml sub/.polyfence.yml', 'deny', 'protect-guardrails'],
@@ -149,6 +157,7 @@ for (const [command, expected, rule] of SHELL_CASES) {
 test('paths and command names match in any case where the file system ignores case', () => {
   const cases: Array<[string, string]> = [
     ['cat .ENV', 'protect-secrets'],
+    ['cat < .ENV', 'protect-secrets'],
     ['GIT push -f', 'no-force-push'],
     ['RM -rf ~', 'no-rm-rf-root'],
     ['/usr/bin/GIT -C . push --force', 'no-force-push'],
