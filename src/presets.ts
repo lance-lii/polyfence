@@ -134,8 +134,10 @@ const recommended: PresetRule[] = [
     reason: 'Piping a download straight into a shell runs unreviewed code. Download, inspect, then run.',
     match: {
       commandLine: [
-        '/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^|;&]*\\|\\s*(?:sudo\\s+)?(?:ba|z|da|k|fi)?sh\\b/',
+        // Also through later pipes or `|&`, by path (/bin/sh), and behind sudo -E, env VAR=1 and friends.
+        '/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^;&]*\\|&?\\s*(?:(?:\\S*\\/)?(?:sudo|doas|env|command|exec|nohup)\\s+(?:[^|;&]*\\s)?)?(?:\\S*\\/)?(?:ba|z|da|k|fi)?sh\\b/',
         '/\\b(?:ba|z)?sh\\s+(?:-c\\s+)?["\']?(?:\\$\\(|<\\()\\s*(?:curl|wget)\\b/',
+        '/(?:^|[\\s;&|(])(?:source|\\.|eval)\\s+["\']?(?:<\\(|\\$\\()\\s*(?:curl|wget)\\b/',
       ],
     },
   },
