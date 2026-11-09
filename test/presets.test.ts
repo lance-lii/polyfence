@@ -51,6 +51,9 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   // hook bypass
   ['git commit --no-verify -m wip', 'deny', 'no-hook-bypass'],
   ['git commit -nm wip', 'deny', 'no-hook-bypass'],
+  ['git commit --no-veri -m wip', 'deny', 'no-hook-bypass'],
+  ['git push --no-verif origin main', 'deny', 'no-hook-bypass'],
+  ['git commit --no-verbose -m x', 'defer'],
   ['git commit --amend -m x', 'defer'],
   ['git commit -am "fix things"', 'defer'],
   ['git push -n', 'defer'],
