@@ -354,16 +354,32 @@ function normalize(raw: RawSeg): Segment | undefined {
   return { argv, rawArgv: raw.words, redirects: raw.redirects, text: argv.join(' ') };
 }
 
-/** Script text run by `bash -c "..."`, `sh -lc '...'` or `eval ...`, if any. */
+const SHELL_VALUE_FLAGS = new Set(['--rcfile', '--init-file']);
+
+/**
+ * Script text run by `bash -c "..."`, `sh -lc '...'` or `eval ...`, if any. Options come
+ * first (`-o pipefail`, `+e`, `--norc`); with `-c` the first operand is the script.
+ */
 function innerScript(argv: string[]): string | undefined {
   if (!argv.length) return undefined;
   if (argv[0] === 'eval') return argv.slice(1).join(' ');
   if (!SHELLS.has(argv[0])) return undefined;
-  for (let i = 1; i < argv.length; i++) {
-    if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(argv[i])) return argv[i + 1];
-    if (!argv[i].startsWith('-')) return undefined;
+  let command = false;
+  let i = 1;
+  for (; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--' || a === '-') {
+      i++;
+      break;
+    }
+    if (/^[-+][a-zA-Z]+$/.test(a)) {
+      if (a[0] === '-' && a.includes('c')) command = true;
+      if (/[oO]/.test(a)) i++; // `-o pipefail`, `+O extglob`: the option name is the next word
+    } else if (a.startsWith('--')) {
+      if (SHELL_VALUE_FLAGS.has(a)) i++;
+    } else break;
   }
-  return undefined;
+  return command ? argv[i] : undefined;
 }
 
 const DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/;

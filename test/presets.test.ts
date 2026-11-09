@@ -29,6 +29,12 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   ['git push -f origin main', 'deny', 'no-force-push'],
   ['git push origin +main', 'deny', 'no-force-push'],
   ['git -C ../x push -uf origin HEAD', 'deny', 'no-force-push'],
+  // shell options before the -c script
+  [`bash -o pipefail -c 'git push --force'`, 'deny', 'no-force-push'],
+  [`bash -e -O extglob -c 'git push -f'`, 'deny', 'no-force-push'],
+  [`sh +e -c 'rm -rf ~'`, 'deny', 'no-rm-rf-root'],
+  [`sh -c -e 'rm -rf ~'`, 'deny', 'no-rm-rf-root'],
+  [`bash -o pipefail ./push-force.sh`, 'defer'],
   ['git push --force-with-lease', 'ask', 'ask-force-with-lease'],
   ['git push origin main', 'defer'],
   ['git push --follow-tags', 'defer'],
