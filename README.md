@@ -157,7 +157,7 @@ Errors inside polyfence follow `onError` (default `deny`), and if polyfence fail
 Codex and Gemini hooks can't open an approval prompt. For those, `ask` follows `askFallback`: `deny` (default) blocks with a message telling the agent to ask you, and `defer` hands the call to the agent's own approval flow. With `askFallback: defer`, Codex still prompts you for shell commands, because `install` compiles your `ask` rules into native `prompt` rules.
 
 Notes:
-- **Codex** loads project-level `.codex/` hooks and rules only for trusted projects. Use `--scope user` to install globally.
+- **Codex** [runs a hook only after you trust it](https://learn.chatgpt.com/docs/hooks): open `/hooks` in Codex after `polyfence install` and approve the polyfence hook, or it does nothing. Trust is tied to the hook's definition, so approve it again if it changes. Codex also loads project-level `.codex/` hooks and rules only for trusted projects. Use `--scope user` to install globally.
 - **Gemini CLI** currently ignores workspace-level policy files. Use `--scope user` if you want the static TOML layer active. The hook works at either scope.
 - **Antigravity** replaced Gemini CLI for most users in June 2026, and its hook format is still settling. Its hooks must always return a [decision](https://antigravity.google/docs/hooks): polyfence sends `deny`, `force_ask` for `ask`, `auto_approve` for `allow`, and `allow` when no rule matches, which leaves the call to Antigravity's own settings. Please [open an issue](../../issues) if something looks off.
 
