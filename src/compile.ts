@@ -8,7 +8,7 @@
  * hook-enforced and is listed in a comment so nothing is silently dropped.
  */
 import os from 'node:os';
-import { commandGlobSource, isRegexLiteral, pathGlobSource } from './patterns.js';
+import { commandGlobSource, isPathRegexLiteral, isRegexLiteral, pathGlobSource } from './patterns.js';
 import type { Policy, Rule, ToolKind } from './types.js';
 
 const arr = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
@@ -138,7 +138,7 @@ function pathValueSource(glob: string): string {
 }
 
 function pathArgsPattern(patterns: string[]): string | null {
-  if (patterns.some(isRegexLiteral) || patterns.some((p) => p.startsWith('!/'))) return null;
+  if (patterns.some(isPathRegexLiteral) || patterns.some((p) => p.startsWith('!/'))) return null;
   const pos = patterns.filter((p) => !p.startsWith('!')).map(pathValueSource);
   const neg = patterns.filter((p) => p.startsWith('!')).map((p) => pathValueSource(p.slice(1)));
   const lookahead = neg.length ? `(?!(?:${neg.join('|')})")` : '';

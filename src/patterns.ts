@@ -25,13 +25,23 @@ function escapeRe(s: string): string {
 }
 
 const REGEX_LITERAL = /^\/(.+)\/([a-z]*)$/s;
+/**
+ * Path patterns are often absolute paths (`/etc/hosts`, `/etc/`), so there `/.../flags` is a
+ * regex only if the flags are real and the body uses regex syntax: `\`, `^`, `$`, `|`, `(` or `[`.
+ */
+const PATH_REGEX_LITERAL = /^\/(.*[\\^$|([].*)\/([dgimsuyv]*)$/s;
 
 export function isRegexLiteral(pattern: string): boolean {
   return REGEX_LITERAL.test(pattern);
 }
 
-function regexLiteral(pattern: string): RegExp | undefined {
-  const m = REGEX_LITERAL.exec(pattern);
+export function isPathRegexLiteral(pattern: string): boolean {
+  return PATH_REGEX_LITERAL.test(pattern);
+}
+
+/** The RegExp of a `/regex/flags` pattern (throws if it is invalid), or undefined for a glob. */
+export function regexLiteral(pattern: string, forPath = false): RegExp | undefined {
+  const m = (forPath ? PATH_REGEX_LITERAL : REGEX_LITERAL).exec(pattern);
   return m ? new RegExp(m[1], m[2]) : undefined;
 }
 
@@ -144,7 +154,7 @@ export function isInside(abs: string, root: string): boolean {
 /** Does one concrete path match one (non-negated) path glob? */
 export function pathMatches(p: string, pattern: string, ctx: PathContext): boolean {
   const abs = resolvePath(p, ctx);
-  const lit = regexLiteral(pattern);
+  const lit = regexLiteral(pattern, true);
   if (lit) return lit.test(abs);
   let glob = pattern.startsWith('./') ? pattern.slice(2) : pattern;
   if (glob.endsWith('/')) glob += '**';

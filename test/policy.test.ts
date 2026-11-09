@@ -37,6 +37,7 @@ const bad: Array<[string, unknown, RegExp]> = [
   ['empty match', { rules: [{ match: {} }] }, /match is empty/],
   ['bad decision', { rules: [{ match: { command: 'x' }, decision: 'block' }] }, /decision must be one of/],
   ['bad regex', { rules: [{ match: { command: '/(/' } }] }, /bad regex/],
+  ['bad path regex', { rules: [{ match: { path: '/(/' } }] }, /bad regex/],
   ['bad tool', { rules: [{ match: { tool: 'bash' } }] }, /unknown tool "bash"/],
   ['duplicate ids', { rules: [{ id: 'a', match: { command: 'x' } }, { id: 'a', match: { command: 'y' } }] }, /duplicate rule id/],
   ['disable unknown', { extends: ['recommended'], disable: ['nope'] }, /disable: "nope"/],
@@ -50,6 +51,23 @@ for (const [name, data, message] of bad) {
     assert.throws(() => build(data), (err: unknown) => err instanceof PolicyError && message.test(err.message));
   });
 }
+
+test('absolute path globs are not read as regexes', () => {
+  const p = build({
+    rules: [
+      { id: 'hosts', match: { writePath: '/etc/hosts' }, decision: 'deny' },
+      { id: 'etc', match: { path: ['/etc/'] }, decision: 'ask' },
+      { id: 'env-re', match: { path: '/\\.env$/' }, decision: 'deny' },
+    ],
+    tests: [
+      { write: '/etc/hosts', expect: 'deny', rule: 'hosts' },
+      { read: '/etc/passwd', expect: 'ask', rule: 'etc' },
+      { read: 'src/fetch.ts', expect: 'defer' },
+      { read: '.env', expect: 'deny', rule: 'env-re' },
+    ],
+  });
+  for (const r of runTests(p)) assert.ok(r.ok, `${r.label}: expected ${r.expected}, got ${r.actual} (${r.ruleId ?? 'no rule'})`);
+});
 
 test('rule ids default to their position', () => {
   const p = build({ rules: [{ match: { command: 'x' } }] });
