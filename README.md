@@ -110,7 +110,7 @@ Run `polyfence presets` for the full list.
 | `no-husky-bypass` | deny | `HUSKY=0 git ...` |
 | `no-hooks-path-override` | deny | `git -c core.hooksPath=...`, `GIT_CONFIG_KEY_0=core.hooksPath` |
 | `ask-destructive-git` | ask | `reset --hard`, `clean -f`, `checkout -- .`, `branch -D`, remote branch deletes |
-| `no-pipe-to-shell` | deny | `curl ... \| sh`, `bash <(curl ...)`, `sh -c "$(wget ...)"` |
+| `no-pipe-to-shell` | deny | `curl ... \| sh` (also `\| /bin/sh`, `\| sudo -E bash`), `bash <(curl ...)`, `sh -c "$(wget ...)"`, `source <(curl ...)`, `eval "$(curl ...)"` |
 | `protect-secrets` | deny | `.env*` (not `.env.example`), `*.pem`, `*.key`, SSH keys, cloud credentials |
 | `protect-guardrails` | deny | writes to polyfence and agent config files |
 | `ask-outside-workspace` | ask | writes outside the project (temp dirs are fine) |
