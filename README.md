@@ -231,7 +231,7 @@ tests:
 | `command` | each parsed command, wrappers removed (`git push -f origin`) | anchored. `*` matches anything. A trailing ` *` also matches nothing, so `git push *` matches `git push`. |
 | `commandLine` | the whole raw command string | unanchored search |
 | `path` | every path a call touches: file-tool paths plus path-like shell arguments and redirect targets | gitignore-style. A bare name (`.env`) matches at any depth, `dir/**` is rooted at the project, `~/` is your home, `**`, `*`, `?`, `{a,b}` |
-| `writePath` | only paths the call modifies: write/edit tools, redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`/`chmod`... | same as `path` |
+| `writePath` | only paths the call modifies: write/edit tools, redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`/`chmod`/`curl -o`/`wget -O`... | same as `path` |
 | `url` | `WebFetch`-style URLs, plus URLs in shell arguments | anchored, case-insensitive |
 
 Any pattern can be a regex instead: `/^git\s+push\b/i`. Start a pattern with `!` to exclude matches. In `path` and `writePath`, `/.../` counts as a regex only if it uses regex syntax (`\`, `^`, `$`, `|`, `(` or `[`), so `/etc/hosts` and `/etc/` are absolute paths.

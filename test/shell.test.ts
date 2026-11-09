@@ -111,6 +111,10 @@ test('extracts touched and written paths', () => {
   assert.deepEqual(w('dd if=/dev/zero of=disk.img'), ['disk.img']);
   assert.deepEqual(w('cat a > b'), ['b']);
   assert.deepEqual(w('cat a'), []);
+  assert.deepEqual(w('curl -fsSLo out.bin https://x.dev/a -o b.txt https://x.dev/b'), ['out.bin', 'b.txt']);
+  assert.deepEqual(w('curl -H "X-Out: -o" -X POST https://x.dev'), []);
+  assert.deepEqual(w('curl -o /dev/null https://x.dev && wget -qO- https://x.dev'), []);
+  assert.deepEqual(w('wget -nv --output-document=page.html https://x.dev'), ['page.html']);
 });
 
 test('survives hostile input', () => {
