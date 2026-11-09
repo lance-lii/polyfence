@@ -7,6 +7,7 @@
  * `$(...)`, backticks, process substitution, `bash -c`/`sh -c`/`eval`, and
  * wrappers such as `sudo`, `env`, `VAR=1`, `timeout`, `nohup` and `xargs`.
  */
+import { CASE_INSENSITIVE } from './patterns.js';
 import type { Segment } from './types.js';
 
 const MAX_DEPTH = 6;
@@ -364,6 +365,11 @@ function basename(word: string): string {
   return idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
 }
 
+/** The command a word runs: `/usr/bin/GIT` is git where file names ignore case. */
+function commandName(word: string): string {
+  return CASE_INSENSITIVE ? basename(word).toLowerCase() : basename(word);
+}
+
 function skipFlags(args: string[], withValue: Set<string>): string[] {
   let i = 0;
   while (i < args.length && args[i].startsWith('-') && args[i] !== '-') {
@@ -387,7 +393,7 @@ export function stripWrappers(argv: string[]): string[] {
       a.shift();
       continue;
     }
-    const w = basename(a[0]);
+    const w = commandName(a[0]);
     if (w === 'sudo' || w === 'doas') a = skipFlags(a.slice(1), SUDO_VALUE_FLAGS);
     else if (w === 'env') a = skipFlags(a.slice(1), ENV_VALUE_FLAGS);
     else if (w === 'command' || w === 'builtin' || w === 'exec' || w === 'nohup' || w === 'stdbuf' || w === 'unbuffer')
@@ -399,7 +405,7 @@ export function stripWrappers(argv: string[]): string[] {
     } else if (w === 'xargs') a = skipFlags(a.slice(1), XARGS_VALUE_FLAGS);
     else break;
   }
-  if (a.length && a[0].includes('/')) a[0] = basename(a[0]);
+  if (a.length) a[0] = commandName(a[0]);
   if (a[0] === 'git') a = ['git', ...stripGitGlobals(a.slice(1))];
   return a;
 }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
-import { commandLineRegex, commandRegex, matchList, pathMatches, resolvePath, urlRegex } from '../src/patterns.js';
+import { CASE_INSENSITIVE, commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, urlRegex } from '../src/patterns.js';
 
 test('command globs are anchored and whitespace-tolerant', () => {
   const re = commandRegex('git push *');
@@ -48,6 +48,13 @@ test('home globs expand ~', () => {
   assert.ok(pathMatches('${HOME}/.ssh/config', '~/.ssh/**', ctx));
   assert.ok(!pathMatches(`${home}/.sshx/a`, '~/.ssh/**', ctx));
   for (const p of ['~', '$HOME', '${HOME}']) assert.equal(resolvePath(p, ctx), path.resolve(home), p);
+});
+
+test('path case follows the platform', () => {
+  assert.equal(pathMatches('/repo/.ENV', '.env', ctx), CASE_INSENSITIVE);
+  assert.equal(pathMatches('/REPO/.Claude/Settings.json', '.claude/settings.json', ctx), CASE_INSENSITIVE);
+  assert.equal(pathMatches(`${os.homedir()}/.SSH/id_rsa`, '~/.ssh/**', ctx), CASE_INSENSITIVE);
+  assert.equal(isInside('/Repo/src', '/repo'), CASE_INSENSITIVE);
 });
 
 test('negated patterns carve exceptions per value', () => {
