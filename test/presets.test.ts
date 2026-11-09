@@ -89,6 +89,16 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   // every file name the hook loads a policy from
   ['echo "default: allow" > polyfence.yml', 'deny', 'protect-guardrails'],
   ['cp loose.yaml sub/.polyfence.yml', 'deny', 'protect-guardrails'],
+  // downloads and tee onto guardrail files
+  ['curl -sSo .claude/settings.json https://x.dev/s.json', 'deny', 'protect-guardrails'],
+  ['curl --output=polyfence.yaml https://x.dev/p.yaml', 'deny', 'protect-guardrails'],
+  ['wget -qO .gemini/settings.json https://x.dev/s.json', 'deny', 'protect-guardrails'],
+  ['wget --output-document .codex/hooks.json https://x.dev/h.json', 'deny', 'protect-guardrails'],
+  [`echo '{}' | tee .claude/settings.json`, 'deny', 'protect-guardrails'],
+  [`echo '{}' | sudo tee -a .agents/hooks.json`, 'deny', 'protect-guardrails'],
+  ['curl -o /dev/null -sw "%{http_code}" https://x.dev', 'defer'],
+  ['curl -fsSL https://x.dev/data.json -o data.json', 'defer'],
+  ['wget -qO- https://x.dev/notes.txt | less', 'defer'],
   // outside workspace
   ['echo x > ../other/file', 'ask', 'ask-outside-workspace'],
   ['echo x > /tmp/scratch.txt', 'defer'],

@@ -498,6 +498,32 @@ export function segmentWrites(seg: Segment): string[] {
     for (const a of rest) if (a.startsWith('of=')) out.push(a.slice(3));
   } else if ((cmd === 'sed' || cmd === 'perl') && rest.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith('--in-place'))) {
     out.push(...operands.slice(1));
+  } else if (cmd === 'curl' || cmd === 'wget') {
+    out.push(...downloadOutputs(cmd, rest));
   }
   return out.filter((p) => !URL_RE.test(p));
+}
+
+/** Short options that take a value, so `-sSo file` and `-Ho` split the way curl and wget do. */
+const DOWNLOAD_VALUE_FLAGS = { curl: 'AbcCdDeEFhHKmoPQrtTuUwxXyYz', wget: 'aABDeiIlnoOPQRtTUwX' };
+const DOWNLOAD_OUTPUT = { curl: ['o', '--output'], wget: ['O', '--output-document'] };
+
+/** Files written by `curl -o FILE` and `wget -O FILE` (`-` is stdout). */
+function downloadOutputs(cmd: 'curl' | 'wget', args: string[]): string[] {
+  const [short, long] = DOWNLOAD_OUTPUT[cmd];
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === long) out.push(args[++i] ?? '');
+    else if (a.startsWith(`${long}=`)) out.push(a.slice(long.length + 1));
+    else if (/^-[^-]/.test(a)) {
+      for (let j = 1; j < a.length; j++) {
+        if (!DOWNLOAD_VALUE_FLAGS[cmd].includes(a[j])) continue;
+        const value = j + 1 < a.length ? a.slice(j + 1) : args[++i];
+        if (a[j] === short && value !== undefined) out.push(value);
+        break;
+      }
+    }
+  }
+  return out.filter((f) => f && f !== '-' && !DEVICE.test(f));
 }
