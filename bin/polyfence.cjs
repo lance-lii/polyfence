@@ -5561,7 +5561,7 @@ function pathGlobSource(glob) {
   return src;
 }
 function expandHome(p) {
-  return p === "~" ? import_node_os.default.homedir() : p.startsWith("~/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(2)) : p.startsWith("$HOME/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(6)) : p;
+  return p === "~" || p === "$HOME" || p === "${HOME}" ? import_node_os.default.homedir() : p.startsWith("~/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(2)) : p.startsWith("$HOME/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(6)) : p.startsWith("${HOME}/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(8)) : p;
 }
 var toPosix = (p) => p.split(import_node_path.default.sep).join("/");
 function resolvePath(p, ctx) {
@@ -5601,18 +5601,18 @@ function collect(src, depth, out) {
   let nested = [];
   for (let raw of tokenize(src, nested)) {
     let seg = normalize(raw);
-    if (!seg) continue;
-    out.push(seg);
-    let inner = innerScript(seg.argv);
-    inner !== void 0 && collect(inner, depth + 1, out);
+    if (seg) {
+      out.push(seg);
+      for (let inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out);
+    }
   }
   for (let n of nested) collect(n, depth + 1, out);
 }
 function tokenize(src, nested) {
-  let segs = [], heredocs = [], words = [], redirects = [], word = "", inWord = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
-    inWord && (pending === "redirect" ? redirects.push(word) : pending === "heredoc" ? heredocs.push({ delim: word, strip: heredocStrip }) : pending !== "herestring" && words.push(word), pending = null, word = "", inWord = !1);
+  let segs = [], heredocs = [], words = [], redirects = [], stdin = [], word = "", inWord = !1, quoted = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
+    inWord && (pending === "redirect" ? redirects.push(word) : pending === "heredoc" ? heredocs.push({ delim: word, strip: heredocStrip, quoted, stdin }) : pending === "herestring" ? stdin.push(word) : words.push(word), pending = null, word = "", inWord = !1, quoted = !1);
   }, endSeg = () => {
-    endWord(), (words.length || redirects.length) && segs.push({ words, redirects }), words = [], redirects = [], pending = null;
+    endWord(), (words.length || redirects.length) && segs.push({ words, redirects, stdin }), words = [], redirects = [], stdin = [], pending = null;
   }, substitution = (start) => {
     let [inner, next] = readParen(src, start);
     return inner.startsWith("(") || nested.push(inner), next;
@@ -5625,16 +5625,26 @@ function tokenize(src, nested) {
         i += 2;
         continue;
       }
-      i + 1 < n && (word += src[i + 1]), inWord = !0, i += 2;
+      i + 1 < n && (word += src[i + 1]), inWord = !0, quoted = !0, i += 2;
       continue;
     }
     if (c2 === "'") {
       let end = src.indexOf("'", i + 1), stop = end === -1 ? n : end;
-      word += src.slice(i + 1, stop), inWord = !0, i = stop + 1;
+      word += src.slice(i + 1, stop), inWord = !0, quoted = !0, i = stop + 1;
+      continue;
+    }
+    if (c2 === "$" && src[i + 1] === "'") {
+      let end = i + 2;
+      for (; end < n && src[end] !== "'"; ) end += src[end] === "\\" ? 2 : 1;
+      word += ansiC(src.slice(i + 2, Math.min(end, n))), inWord = !0, quoted = !0, i = end + 1;
+      continue;
+    }
+    if (c2 === "$" && src[i + 1] === '"') {
+      i++;
       continue;
     }
     if (c2 === '"') {
-      for (inWord = !0, i++; i < n && src[i] !== '"'; )
+      for (inWord = !0, quoted = !0, i++; i < n && src[i] !== '"'; )
         if (src[i] === "\\" && i + 1 < n && '"\\$`\n'.includes(src[i + 1]))
           src[i + 1] !== `
 ` && (word += src[i + 1]), i += 2;
@@ -5675,7 +5685,12 @@ function tokenize(src, nested) {
     }
     if (c2 === `
 `) {
-      endSeg(), i++, heredocs.length && (i = skipHeredocs(src, i, heredocs), heredocs.length = 0);
+      if (endSeg(), i++, heredocs.length) {
+        i = skipHeredocs(src, i, heredocs);
+        for (let doc of heredocs)
+          doc.stdin?.push(doc.body ?? ""), doc.quoted || bodySubstitutions(doc.body ?? "", nested);
+        heredocs.length = 0;
+      }
       continue;
     }
     if (c2 === "&" && src[i + 1] === ">") {
@@ -5761,13 +5776,40 @@ function readBacktick(src, open) {
 }
 function skipHeredocs(src, start, docs) {
   let i = start;
-  for (let doc of docs)
+  for (let doc of docs) {
+    let lines = [];
     for (; i < src.length; ) {
       let nl = src.indexOf(`
 `, i), end = nl === -1 ? src.length : nl, line = src.slice(i, end);
       if (doc.strip && (line = line.replace(/^\t+/, "")), i = end + 1, line.trim() === doc.delim) break;
+      lines.push(line);
     }
+    doc.body = lines.join(`
+`);
+  }
   return Math.min(i, src.length);
+}
+function bodySubstitutions(body, nested) {
+  for (let i = 0; i < body.length; i++)
+    if (body[i] === "\\") i++;
+    else if (body[i] === "$" && body[i + 1] === "(") {
+      let [inner, next] = readParen(body, i + 1);
+      inner.startsWith("(") || nested.push(inner), i = next - 1;
+    } else if (body[i] === "`") {
+      let [inner, next] = readBacktick(body, i);
+      nested.push(inner), i = next - 1;
+    }
+}
+var ANSI_C = { a: "\x07", b: "\b", e: "\x1B", E: "\x1B", f: "\f", n: `
+`, r: "\r", t: "	", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+function ansiC(body) {
+  return body.replace(/\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c[\s\S]|[\s\S])/g, (all, e) => {
+    if (/^[xuU]./.test(e)) {
+      let code = parseInt(e.slice(1), 16);
+      return code <= 1114111 ? String.fromCodePoint(code) : all;
+    }
+    return /^[0-7]/.test(e) ? String.fromCharCode(parseInt(e, 8) & 255) : e.length === 2 && e[0] === "c" ? String.fromCharCode(e.charCodeAt(1) & 31) : ANSI_C[e] ?? all;
+  });
 }
 function basename(word) {
   let idx = word.lastIndexOf("/");
@@ -5816,15 +5858,25 @@ function normalize(raw) {
   if (!(!argv.length && !raw.redirects.length))
     return { argv, rawArgv: raw.words, redirects: raw.redirects, text: argv.join(" ") };
 }
-function innerScript(argv) {
-  if (argv.length) {
-    if (argv[0] === "eval") return argv.slice(1).join(" ");
-    if (SHELLS.has(argv[0]))
-      for (let i = 1; i < argv.length; i++) {
-        if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(argv[i])) return argv[i + 1];
-        if (!argv[i].startsWith("-")) return;
-      }
+var SHELL_VALUE_FLAGS = /* @__PURE__ */ new Set(["--rcfile", "--init-file"]);
+function innerScript(argv, stdin) {
+  if (!argv.length) return [];
+  if (argv[0] === "eval") return [argv.slice(1).join(" ")];
+  if (!SHELLS.has(argv[0])) return [];
+  let command = !1, fromStdin = !1, i = 1;
+  for (; i < argv.length; i++) {
+    let a = argv[i];
+    if (a === "--" || a === "-") {
+      i++;
+      break;
+    }
+    if (/^[-+][a-zA-Z]+$/.test(a))
+      a[0] === "-" && a.includes("c") && (command = !0), a[0] === "-" && a.includes("s") && (fromStdin = !0), /[oO]/.test(a) && i++;
+    else if (a.startsWith("--"))
+      SHELL_VALUE_FLAGS.has(a) && i++;
+    else break;
   }
+  return command ? i < argv.length ? [argv[i]] : [] : fromStdin || i >= argv.length ? stdin : [];
 }
 var DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/, URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 function segmentPaths(seg) {
@@ -5949,6 +6001,8 @@ var SECRET_PATHS = [
 ], GUARDRAIL_FILES = [
   "polyfence.yaml",
   ".polyfence.yaml",
+  "polyfence.yml",
+  ".polyfence.yml",
   ".polyfence/**",
   "~/.config/polyfence/**",
   ".claude/settings.json",
@@ -5973,7 +6027,7 @@ var SECRET_PATHS = [
     reason: "Recursive delete of /, ~, $HOME, . or * is blocked. Delete specific paths instead.",
     match: {
       command: [
-        "/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/"
+        "/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\$\\{HOME\\}|\\$\\{HOME\\}\\/|\\$\\{HOME\\}\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/"
       ]
     }
   },
@@ -6018,7 +6072,7 @@ var SECRET_PATHS = [
     match: {
       command: [
         "git reset --hard *",
-        "/^git\\s+clean\\b.*\\s-[a-zA-Z]*f/",
+        "/^git\\s+clean\\b.*\\s(?:-[a-zA-Z]*f|--force\\b)/",
         "git checkout -- *",
         "git checkout .",
         "/^git\\s+restore\\s+(?!.*--staged)/",
@@ -6413,12 +6467,12 @@ var GEMINI_TOOLS = {
   write: ["write_file"],
   edit: ["replace"],
   fetch: ["web_fetch", "google_web_search"]
-};
+}, GEMINI_SHELL = "run_shell_command", geminiAccepts = (argsPattern) => argsPattern.length <= 2048 && !/\([^)]*[*+?{].*\)[*+?{]/.test(argsPattern);
 function tomlString(s) {
   return !s.includes("'") && !/[\n\r]/.test(s) ? `'${s}'` : JSON.stringify(s);
 }
 function toArgsRegex(source) {
-  let out = "", inClass = !1;
+  let out = "", inClass = !1, lookaround = [];
   for (let i = 0; i < source.length; i++) {
     let c2 = source[i];
     if (c2 === "\\") {
@@ -6428,6 +6482,10 @@ function toArgsRegex(source) {
     if (c2 === "[" ? inClass = !0 : c2 === "]" && (inClass = !1), !(!inClass && c2 === "^" && i === 0)) {
       if (!inClass && c2 === "$") {
         out += '(?=")';
+        continue;
+      }
+      if (!inClass && c2 === "(" && lookaround.push(/^\?<?[=!]/.test(source.slice(i + 1, i + 4))), !inClass && c2 === ")" && !lookaround.pop() && source[i + 1] === "?" && source[i + 2] !== "?") {
+        out += "|)", i++;
         continue;
       }
       out += c2;
@@ -6442,8 +6500,8 @@ function commandSource(pattern) {
 function pathValueSource(glob) {
   let g = glob.startsWith("./") ? glob.slice(2) : glob;
   g.startsWith("~/") && (g = import_node_os4.default.homedir() + g.slice(1));
-  let body = pathGlobSource(g).replace(/\[\^\/\]/g, '[^/"]').replace(/\.\*/g, '[^"]*');
-  return g.startsWith("/") ? body : `(?:[^"]*/)?${body}`;
+  let body = pathGlobSource(g).replace(/\[\^\/\]/g, '[^/"]').replace(/\.\*/g, '[^"]*').replace(/\)\?/g, "|)");
+  return g.startsWith("/") ? body : `(?:[^"]*/|)${body}`;
 }
 function pathArgsPattern(patterns) {
   if (patterns.some(isRegexLiteral) || patterns.some((p) => p.startsWith("!/"))) return null;
@@ -6457,17 +6515,17 @@ function geminiRulesFor(rule) {
   if (cmd.length || line.length) {
     if (m.path || m.writePath || cmd.some((p) => p.startsWith("!")) || line.some((p) => p.startsWith("!"))) return null;
     let out = [], prefixes = cmd.map(literalPrefix), simple = prefixes.filter(Boolean);
-    simple.length && out.push({ commandPrefix: simple.map((p) => p.join(" ")) });
+    simple.length && out.push({ toolName: GEMINI_SHELL, commandPrefix: simple.map((p) => p.join(" ")) });
     for (let i = 0; i < cmd.length; i++) {
       if (prefixes[i]) continue;
       let src = commandSource(cmd[i]);
-      if (src === null) return null;
-      out.push({ commandRegex: src });
+      if (src === null || !geminiAccepts(`"command":"${src}`)) return null;
+      out.push({ toolName: GEMINI_SHELL, commandRegex: src });
     }
     for (let p of line) {
-      let src = commandSource(p);
-      if (src === null) return null;
-      out.push({ commandRegex: `.*${src.replace(/^\.\*/, "")}` });
+      let src = commandSource(p), regex = src === null ? null : `.*${src.replace(/^\.\*/, "")}`;
+      if (regex === null || !geminiAccepts(`"command":"${regex}`)) return null;
+      out.push({ toolName: GEMINI_SHELL, commandRegex: regex });
     }
     return out;
   }
@@ -6475,7 +6533,7 @@ function geminiRulesFor(rule) {
   if (!toolNames.length) return null;
   if (!paths.length) return [{ toolName: toolNames }];
   let argsPattern = pathArgsPattern(paths);
-  return argsPattern ? [{ toolName: toolNames, argsPattern }] : null;
+  return argsPattern && geminiAccepts(argsPattern) ? [{ toolName: toolNames, argsPattern }] : null;
 }
 function compileGemini(policy) {
   let out = HEADER(policy.source, "#") + `
