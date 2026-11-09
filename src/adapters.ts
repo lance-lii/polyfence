@@ -274,12 +274,11 @@ const antigravity: Adapter = {
   nativeAsk: true,
   toCall: agyCall,
   workspace: (input) => str((Array.isArray(input.workspacePaths) ? input.workspacePaths : [])[0]) ?? sessionCwd(input),
-  reply: (verdict, _policy, call) => {
-    // Antigravity fails closed on a missing decision, so always answer. For `defer`
-    // we mirror its defaults: review shell commands and writes, let reads through.
-    // `force_ask` bypasses the "always allow" cache.
-    const neutral = call && (call.tool === 'read' || call.tool === 'fetch') ? 'allow' : 'ask';
-    const decision = { deny: 'deny', ask: 'force_ask', allow: 'allow', defer: neutral }[verdict.outcome];
+  reply: (verdict) => {
+    // Antigravity requires a decision (https://antigravity.google/docs/hooks). `allow` hands the
+    // call on to the next hook or Antigravity's own policy, which is what `defer` means;
+    // `auto_approve` approves it, and `force_ask` prompts even after "Always Allow".
+    const decision = { deny: 'deny', ask: 'force_ask', allow: 'auto_approve', defer: 'allow' }[verdict.outcome];
     const reply: Json = { decision };
     if (verdict.outcome !== 'defer') reply.reason = message(verdict);
     return { exitCode: 0, stdout: JSON.stringify(reply) };
