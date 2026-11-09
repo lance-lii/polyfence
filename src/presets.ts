@@ -104,7 +104,7 @@ const recommended: PresetRule[] = [
     match: {
       command: [
         'git reset --hard *',
-        '/^git\\s+clean\\b.*\\s-[a-zA-Z]*f/',
+        '/^git\\s+clean\\b.*\\s(?:-[a-zA-Z]*f|--force\\b)/',
         'git checkout -- *',
         'git checkout .',
         '/^git\\s+restore\\s+(?!.*--staged)/',

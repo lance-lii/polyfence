@@ -57,6 +57,8 @@ const SHELL_CASES: Array<[string, Outcome, string?]> = [
   // destructive git
   ['git reset --hard HEAD~2', 'ask', 'ask-destructive-git'],
   ['git clean -fdx', 'ask', 'ask-destructive-git'],
+  ['git clean --force -d', 'ask', 'ask-destructive-git'],
+  ['git clean -n', 'defer'],
   ['git checkout -- .', 'ask', 'ask-destructive-git'],
   ['git restore src/', 'ask', 'ask-destructive-git'],
   ['git restore --staged src/', 'defer'],
