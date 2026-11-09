@@ -64,6 +64,13 @@ test('finds command substitutions in unquoted heredoc bodies only', () => {
   }
 });
 
+test('decodes ANSI-C and locale quoting', () => {
+  assert.deepEqual(texts(`$'git' push $"--force"`), ['git push --force']);
+  assert.deepEqual(texts(`$'\\x67it' push $'\\055f'`), ['git push -f']);
+  assert.deepEqual(parseShell(`printf $'a\\tb\\'c\\\\'`)[0].argv, ['printf', "a\tb'c\\"]);
+  assert.deepEqual(texts(`IFS=$'\\n' read -r line`), ['read -r line']);
+});
+
 test('skips heredoc bodies', () => {
   const src = `git commit -m "$(cat <<'EOF'
 rm -rf / is now handled (closes #12)

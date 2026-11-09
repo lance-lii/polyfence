@@ -112,6 +112,20 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
       i = stop + 1;
       continue;
     }
+    if (c === '$' && src[i + 1] === "'") {
+      // ANSI-C quoting: $'\x67it' is `git`.
+      let end = i + 2;
+      while (end < n && src[end] !== "'") end += src[end] === '\\' ? 2 : 1;
+      word += ansiC(src.slice(i + 2, Math.min(end, n)));
+      inWord = true;
+      quoted = true;
+      i = end + 1;
+      continue;
+    }
+    if (c === '$' && src[i + 1] === '"') {
+      i++; // bash: $"..." is a (translated) double-quoted string
+      continue;
+    }
     if (c === '"') {
       inWord = true;
       quoted = true;
@@ -328,6 +342,21 @@ function bodySubstitutions(body: string, nested: string[]): void {
       i = next - 1;
     }
   }
+}
+
+const ANSI_C: Record<string, string> = { a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', '\\': '\\', "'": "'", '"': '"', '?': '?' };
+
+/** Decodes the body of `$'...'`; unknown escapes stay as they are, like bash. */
+function ansiC(body: string): string {
+  return body.replace(/\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c[\s\S]|[\s\S])/g, (all, e: string) => {
+    if (/^[xuU]./.test(e)) {
+      const code = parseInt(e.slice(1), 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : all;
+    }
+    if (/^[0-7]/.test(e)) return String.fromCharCode(parseInt(e, 8) & 0xff);
+    if (e.length === 2 && e[0] === 'c') return String.fromCharCode(e.charCodeAt(1) & 0x1f);
+    return ANSI_C[e] ?? all;
+  });
 }
 
 function basename(word: string): string {
