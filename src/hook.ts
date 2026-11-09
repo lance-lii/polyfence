@@ -3,7 +3,7 @@ import { ADAPTERS, detectAgent, type HookReply } from './adapters.js';
 import { record } from './audit.js';
 import { evaluate } from './engine.js';
 import { builtinPolicy, findPolicyFile, loadPolicy, userConfigDir } from './policy.js';
-import type { AgentName, Outcome, Policy, Verdict } from './types.js';
+import type { AgentName, Outcome, Policy, ToolCall, Verdict } from './types.js';
 
 /** Resolve the policy that governs a tool call made in `cwd`. */
 export function policyFor(cwd: string): Policy {
@@ -24,7 +24,6 @@ export function runHook(stdin: string, agentArg?: AgentName): HookReply {
     return { exitCode: 0, stderr: 'polyfence: hook input was not JSON; ignoring\n' };
   }
   const adapter = ADAPTERS[agentArg ?? detectAgent(input)];
-  const call = adapter.toCall(input);
   const workspace = adapter.workspace(input);
 
   let policy: Policy;
@@ -32,11 +31,13 @@ export function runHook(stdin: string, agentArg?: AgentName): HookReply {
     policy = policyFor(workspace);
   } catch (err) {
     const verdict: Verdict = { outcome: 'deny', reason: `policy error, failing closed: ${(err as Error).message}`, matched: [] };
-    return adapter.reply(verdict, builtinPolicy(workspace), call);
+    return adapter.reply(verdict, builtinPolicy(workspace));
   }
 
+  let call: ToolCall | undefined;
   let verdict: Verdict;
   try {
+    call = adapter.toCall(input);
     verdict = evaluate(policy, call);
   } catch (err) {
     if (policy.onError === 'allow') return { exitCode: 0, stderr: `polyfence: ${(err as Error).message}\n` };
@@ -46,6 +47,6 @@ export function runHook(stdin: string, agentArg?: AgentName): HookReply {
   let sent: Outcome = verdict.outcome;
   if (sent === 'ask' && !adapter.nativeAsk) sent = policy.askFallback;
   if (sent === 'allow' && adapter.name === 'codex') sent = 'defer';
-  record(policy, call, verdict, sent);
+  if (call) record(policy, call, verdict, sent);
   return adapter.reply(verdict, policy, call);
 }

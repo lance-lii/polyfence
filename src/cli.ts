@@ -362,9 +362,10 @@ export async function main(argv: string[]): Promise<void> {
 
 main(process.argv.slice(2)).catch((err) => {
   if (process.argv[2] === 'hook') {
-    // Never crash an agent's tool call with a stack trace.
-    process.stderr.write(`polyfence: ${(err as Error).message}\n`);
-    process.exit(0);
+    // runHook already applies the policy's onError; this is an error before any policy was
+    // read, so use the default (deny). Exit code 2 blocks the call in Claude Code, Codex and Gemini CLI.
+    process.stderr.write(`polyfence: internal error, failing closed: ${(err as Error).message}\n`);
+    process.exit(2);
   }
   fail((err as Error).stack ?? String(err));
 });

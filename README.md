@@ -94,7 +94,7 @@ The `reason` goes back to the agent, so it changes course instead of retrying th
 - **🧱 Two layers.** The hook is the main enforcement point. `install` also compiles what it can into Codex `prefix_rule`s and Gemini policy-engine TOML, so a missing or broken hook still leaves the native layer in place.
 - **📜 Audit log.** Every decision lands in `.polyfence/audit.jsonl`. `polyfence log --deny` shows you what your agents tried.
 - **⚡ Fast and small.** ~30 ms per hook call. Zero runtime dependencies: it ships as one bundled file. No daemon, no network, no telemetry.
-- **🧯 Fails closed.** A broken policy file denies tool calls with a clear message instead of silently letting everything through.
+- **🧯 Fails closed.** A broken policy file or an internal error denies tool calls with a clear message instead of silently letting everything through. If the hook can't run at all, only Claude Code can be told to block; see [Agent support](#agent-support).
 
 ## What `recommended` covers
 
@@ -149,6 +149,9 @@ Ordinary work (`npm test`, `git status`, `rm -rf node_modules`, `git push origin
 | `allow` (auto-approve) | ✅ | ↪ defer | ✅ | ⚠️ version-dependent |
 | Static native rules | — (hook only) | ✅ `prefix_rule` | ✅ policy TOML | — |
 | Shell, file and fetch tools | ✅ | ✅ incl. `apply_patch` | ✅ | ✅ |
+| Blocks when the hook can't run | ✅ `onFailure: block` | ❌ | ❌ | ❓ undocumented |
+
+Errors inside polyfence follow `onError` (default `deny`), and if polyfence fails before it has read the policy it exits with code 2, which blocks the call in Claude Code, Codex and Gemini CLI. A hook that can't run at all is up to the agent: polyfence or `node` missing from `PATH`, the process killed, or a timeout. `install` sets [`"onFailure": "block"`](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails) for Claude Code (v2.1.295 or later), so those calls are blocked. Codex and Gemini CLI have no such setting and run the tool call when a hook fails or times out, and Antigravity doesn't document what it does. On those, check `polyfence doctor` after installing.
 
 Codex and Gemini hooks can't open an approval prompt. For those, `ask` follows `askFallback`: `deny` (default) blocks with a message telling the agent to ask you, and `defer` hands the call to the agent's own approval flow. With `askFallback: defer`, Codex still prompts you for shell commands, because `install` compiles your `ask` rules into native `prompt` rules.
 
