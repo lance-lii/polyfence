@@ -21,7 +21,7 @@ type Json = Record<string, any>;
 
 /** Matches `polyfence hook claude`, `npx --no polyfence hook codex`, `node /x/polyfence/dist/src/cli.js hook gemini`... */
 const MARKER = /polyfence\S*(?:\s.*)?\shook(?:\s|$)|polyfence hook/;
-const AGY_TOOLS = ['run_command', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'view_file', 'read_url_content'];
+const AGY_TOOLS = ['run_command', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'view_file', 'grep_search', 'read_url_content'];
 
 function base(scope: Scope, root: string): string {
   return scope === 'user' ? os.homedir() : root;

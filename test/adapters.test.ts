@@ -92,18 +92,18 @@ test('gemini: BeforeTool payloads', () => {
   assert.equal(replace.reply.stdout, '{}');
 });
 
-test('antigravity: toolCall payloads always get a decision', () => {
+test('antigravity: toolCall payloads always get one of its documented decisions', () => {
   const input = (name: string, args: Record<string, unknown>) => ({ toolCall: { name, args }, workspacePaths: [ROOT] });
-  const deny = run('antigravity', input('run_command', { CommandLine: 'rm -rf ~', Cwd: ROOT }));
-  assert.equal(JSON.parse(deny.reply.stdout!).decision, 'deny');
-  const ask = run('antigravity', input('run_command', { CommandLine: 'git clean -fd' }));
-  assert.equal(JSON.parse(ask.reply.stdout!).decision, 'force_ask');
-  const neutralShell = run('antigravity', input('run_command', { CommandLine: 'ls' }));
-  assert.equal(JSON.parse(neutralShell.reply.stdout!).decision, 'ask');
-  const neutralRead = run('antigravity', input('view_file', { AbsolutePath: `${ROOT}/README.md` }));
-  assert.equal(JSON.parse(neutralRead.reply.stdout!).decision, 'allow');
-  const secret = run('antigravity', input('view_file', { AbsolutePath: `${ROOT}/.env` }));
-  assert.equal(JSON.parse(secret.reply.stdout!).decision, 'deny');
+  const decision = (r: ReturnType<typeof run>) => JSON.parse(r.reply.stdout!).decision;
+  assert.equal(decision(run('antigravity', input('run_command', { CommandLine: 'rm -rf ~', Cwd: ROOT }))), 'deny');
+  assert.equal(decision(run('antigravity', input('run_command', { CommandLine: 'git clean -fd' }))), 'force_ask');
+  // `allow` hands an unmatched call to Antigravity's own policy instead of prompting for it.
+  assert.equal(decision(run('antigravity', input('run_command', { CommandLine: 'ls' }))), 'allow');
+  assert.equal(decision(run('antigravity', input('view_file', { AbsolutePath: `${ROOT}/README.md` }))), 'allow');
+  assert.equal(decision(run('antigravity', input('view_file', { AbsolutePath: `${ROOT}/.env` }))), 'deny');
+  assert.equal(decision(run('antigravity', input('grep_search', { SearchPath: `${ROOT}/.env`, Query: 'KEY' }))), 'deny');
+  const allowTests = buildPolicy({ rules: [{ id: 'tests', match: { command: 'npm test *' }, decision: 'allow' }] }, { root: ROOT });
+  assert.equal(decision(run('antigravity', input('run_command', { CommandLine: 'npm test' }), allowTests)), 'auto_approve');
 });
 
 test('detectAgent', () => {

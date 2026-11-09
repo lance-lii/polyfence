@@ -52,7 +52,8 @@ test('install wires every agent and writes native rules', () => {
 
   assert.equal(read(path.join(root, '.codex/hooks.json')).hooks.PreToolUse[0].hooks[0].command, 'npx --no polyfence hook codex');
   assert.equal(read(path.join(root, '.gemini/settings.json')).hooks.BeforeTool[0].hooks[0].command, 'npx --no polyfence hook gemini');
-  assert.ok(read(path.join(root, '.agents/hooks.json')).polyfence.PreToolUse.some((e: any) => e.matcher === 'run_command'));
+  const agyMatchers = read(path.join(root, '.agents/hooks.json')).polyfence.PreToolUse.map((e: any) => e.matcher);
+  for (const tool of ['run_command', 'view_file', 'grep_search']) assert.ok(agyMatchers.includes(tool), tool);
   assert.match(fs.readFileSync(path.join(root, '.codex/rules/polyfence.rules'), 'utf8'), /prefix_rule\(/);
   assert.match(fs.readFileSync(path.join(root, '.gemini/policies/polyfence.toml'), 'utf8'), /\[\[rule\]\]/);
   for (const agent of AGENTS) assert.ok(isInstalled(agent, 'project', root), agent);

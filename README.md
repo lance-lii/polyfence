@@ -146,7 +146,7 @@ Ordinary work (`npm test`, `git status`, `rm -rf node_modules`, `git push origin
 | Hook enforcement | ✅ | ✅ | ✅ | 🧪 experimental |
 | `deny` | ✅ | ✅ | ✅ | ✅ |
 | `ask` | ✅ native | ↪ `askFallback` | ↪ `askFallback` | ✅ `force_ask` |
-| `allow` (auto-approve) | ✅ | ↪ defer | ✅ | ⚠️ version-dependent |
+| `allow` (auto-approve) | ✅ | ↪ defer | ✅ | ✅ `auto_approve` |
 | Static native rules | — (hook only) | ✅ `prefix_rule` | ✅ policy TOML | — |
 | Shell, file and fetch tools | ✅ | ✅ incl. `apply_patch` | ✅ | ✅ |
 | Blocks when the hook can't run | ✅ `onFailure: block` | ❌ | ❌ | ❓ undocumented |
@@ -158,7 +158,7 @@ Codex and Gemini hooks can't open an approval prompt. For those, `ask` follows `
 Notes:
 - **Codex** loads project-level `.codex/` hooks and rules only for trusted projects. Use `--scope user` to install globally.
 - **Gemini CLI** currently ignores workspace-level policy files. Use `--scope user` if you want the static TOML layer active. The hook works at either scope.
-- **Antigravity** replaced Gemini CLI for most users in June 2026, and its hook format is still settling. Please [open an issue](../../issues) if something looks off.
+- **Antigravity** replaced Gemini CLI for most users in June 2026, and its hook format is still settling. Its hooks must always return a [decision](https://antigravity.google/docs/hooks): polyfence sends `deny`, `force_ask` for `ask`, `auto_approve` for `allow`, and `allow` when no rule matches, which leaves the call to Antigravity's own settings. Please [open an issue](../../issues) if something looks off.
 
 ## CLI
 
