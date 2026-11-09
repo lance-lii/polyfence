@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { agentFiles, install, isInstalled, uninstall } from '../src/install.js';
 import { builtinPolicy } from '../src/policy.js';
 import { AGENTS } from '../src/types.js';
@@ -30,12 +31,18 @@ test('install merges into existing Claude settings and is idempotent', () => {
   assert.equal(data.hooks.PreToolUse.length, 2);
   assert.deepEqual(data.hooks.PreToolUse[0], other);
   assert.equal(data.hooks.PreToolUse[1].hooks[0].command, 'polyfence hook claude');
+  assert.equal(data.hooks.PreToolUse[1].hooks[0].onFailure, 'block', 'a missing, crashing or stalled hook must block the call');
   assert.ok(isInstalled('claude', 'project', root));
 
   uninstall('claude', { scope: 'project', root, dryRun: false });
   const after = read(settings);
   assert.deepEqual(after.hooks.PreToolUse, [other]);
   assert.ok(!isInstalled('claude', 'project', root));
+});
+
+test('the Claude Code plugin hook fails closed too', () => {
+  const plugin = read(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../hooks/hooks.json'));
+  for (const entry of plugin.hooks.PreToolUse) for (const hook of entry.hooks) assert.equal(hook.onFailure, 'block');
 });
 
 test('install wires every agent and writes native rules', () => {
@@ -45,7 +52,8 @@ test('install wires every agent and writes native rules', () => {
 
   assert.equal(read(path.join(root, '.codex/hooks.json')).hooks.PreToolUse[0].hooks[0].command, 'npx --no polyfence hook codex');
   assert.equal(read(path.join(root, '.gemini/settings.json')).hooks.BeforeTool[0].hooks[0].command, 'npx --no polyfence hook gemini');
-  assert.ok(read(path.join(root, '.agents/hooks.json')).polyfence.PreToolUse.some((e: any) => e.matcher === 'run_command'));
+  const agyMatchers = read(path.join(root, '.agents/hooks.json')).polyfence.PreToolUse.map((e: any) => e.matcher);
+  for (const tool of ['run_command', 'view_file', 'grep_search']) assert.ok(agyMatchers.includes(tool), tool);
   assert.match(fs.readFileSync(path.join(root, '.codex/rules/polyfence.rules'), 'utf8'), /prefix_rule\(/);
   assert.match(fs.readFileSync(path.join(root, '.gemini/policies/polyfence.toml'), 'utf8'), /\[\[rule\]\]/);
   for (const agent of AGENTS) assert.ok(isInstalled(agent, 'project', root), agent);

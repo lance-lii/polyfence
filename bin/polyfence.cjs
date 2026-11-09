@@ -844,10 +844,10 @@ var require_foldFlowLines = __commonJS({
       onFold && onFold();
       let res = text.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
-        let fold = folds[i2], end2 = folds[i2 + 1] || text.length;
-        fold === 0 ? res = `
-${indent}${text.slice(0, end2)}` : (mode === FOLD_QUOTED && escapedFolds[fold] && (res += `${text[fold]}\\`), res += `
-${indent}${text.slice(fold + 1, end2)}`);
+        let fold2 = folds[i2], end2 = folds[i2 + 1] || text.length;
+        fold2 === 0 ? res = `
+${indent}${text.slice(0, end2)}` : (mode === FOLD_QUOTED && escapedFolds[fold2] && (res += `${text[fold2]}\\`), res += `
+${indent}${text.slice(fold2 + 1, end2)}`);
       }
       return res;
     }
@@ -3477,8 +3477,8 @@ var require_resolve_flow_scalar = __commonJS({
 `))
           if (ch === `
 `) {
-            let { fold, offset } = foldNewline(source, i);
-            res += fold, i = offset;
+            let { fold: fold2, offset } = foldNewline(source, i);
+            res += fold2, i = offset;
           } else if (ch === "\\") {
             let next = source[++i], cc = escapeCodes[next];
             if (cc)
@@ -3511,14 +3511,14 @@ var require_resolve_flow_scalar = __commonJS({
       return (source[source.length - 1] !== '"' || source.length === 1) && onError(source.length, "MISSING_CHAR", 'Missing closing "quote'), res;
     }
     function foldNewline(source, offset) {
-      let fold = "", ch = source[offset + 1];
+      let fold2 = "", ch = source[offset + 1];
       for (; (ch === " " || ch === "	" || ch === `
 ` || ch === "\r") && !(ch === "\r" && source[offset + 2] !== `
 `); )
         ch === `
-` && (fold += `
+` && (fold2 += `
 `), offset += 1, ch = source[offset + 1];
-      return fold || (fold = " "), { fold, offset };
+      return fold2 || (fold2 = " "), { fold: fold2, offset };
     }
     var escapeCodes = {
       0: "\0",
@@ -5495,16 +5495,19 @@ var import_node_fs2 = __toESM(require("node:fs"), 1), import_node_path4 = __toES
 var import_node_os2 = __toESM(require("node:os"), 1), import_node_path2 = __toESM(require("node:path"), 1);
 
 // src/patterns.ts
-var import_node_os = __toESM(require("node:os"), 1), import_node_path = __toESM(require("node:path"), 1), cache = /* @__PURE__ */ new Map();
+var import_node_os = __toESM(require("node:os"), 1), import_node_path = __toESM(require("node:path"), 1), CASE_INSENSITIVE = process.platform === "darwin" || process.platform === "win32", fold = (s) => CASE_INSENSITIVE ? s.toLowerCase() : s, PATH_FLAGS = CASE_INSENSITIVE ? "i" : "", cache = /* @__PURE__ */ new Map();
 function escapeRe(s) {
   return s.replace(/[.+^${}()|[\]\\]/g, "\\$&");
 }
-var REGEX_LITERAL = /^\/(.+)\/([a-z]*)$/s;
+var REGEX_LITERAL = /^\/(.+)\/([a-z]*)$/s, PATH_REGEX_LITERAL = /^\/(.*[\\^$|([].*)\/([dgimsuyv]*)$/s;
 function isRegexLiteral(pattern) {
   return REGEX_LITERAL.test(pattern);
 }
-function regexLiteral(pattern) {
-  let m = REGEX_LITERAL.exec(pattern);
+function isPathRegexLiteral(pattern) {
+  return PATH_REGEX_LITERAL.test(pattern);
+}
+function regexLiteral(pattern, forPath = !1) {
+  let m = (forPath ? PATH_REGEX_LITERAL : REGEX_LITERAL).exec(pattern);
   return m ? new RegExp(m[1], m[2]) : void 0;
 }
 function memo(kind, pattern, build) {
@@ -5561,29 +5564,29 @@ function pathGlobSource(glob) {
   return src;
 }
 function expandHome(p) {
-  return p === "~" ? import_node_os.default.homedir() : p.startsWith("~/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(2)) : p.startsWith("$HOME/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(6)) : p;
+  return p === "~" || p === "$HOME" || p === "${HOME}" ? import_node_os.default.homedir() : p.startsWith("~/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(2)) : p.startsWith("$HOME/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(6)) : p.startsWith("${HOME}/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(8)) : p;
 }
 var toPosix = (p) => p.split(import_node_path.default.sep).join("/");
 function resolvePath(p, ctx) {
   return toPosix(import_node_path.default.resolve(ctx.cwd, expandHome(p)));
 }
 function isInside(abs, root) {
-  let rel = import_node_path.default.relative(root, abs);
+  let rel = import_node_path.default.relative(fold(root), fold(abs));
   return rel === "" || !rel.startsWith("..") && !import_node_path.default.isAbsolute(rel);
 }
 function pathMatches(p, pattern, ctx) {
-  let abs = resolvePath(p, ctx), lit = regexLiteral(pattern);
+  let abs = resolvePath(p, ctx), lit = regexLiteral(pattern, !0);
   if (lit) return lit.test(abs);
   let glob = pattern.startsWith("./") ? pattern.slice(2) : pattern;
   if (glob.endsWith("/") && (glob += "**"), !glob.includes("/"))
-    return memo("base", glob, () => new RegExp("^" + pathGlobSource(glob) + "$")).test(abs.slice(abs.lastIndexOf("/") + 1));
+    return memo("base", glob, () => new RegExp("^" + pathGlobSource(glob) + "$", PATH_FLAGS)).test(abs.slice(abs.lastIndexOf("/") + 1));
   let expanded = toPosix(expandHome(glob));
   if (expanded.startsWith("/"))
-    return memo("abs", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$")).test(abs);
+    return memo("abs", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$", PATH_FLAGS)).test(abs);
   let rootAbs = toPosix(import_node_path.default.resolve(ctx.root));
   if (!isInside(abs, rootAbs)) return !1;
-  let rel = toPosix(import_node_path.default.relative(rootAbs, abs));
-  return memo("rel", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$")).test(rel);
+  let rel = toPosix(import_node_path.default.relative(fold(rootAbs), fold(abs)));
+  return memo("rel", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$", PATH_FLAGS)).test(rel);
 }
 function matchList(values, patterns, test) {
   let positive = patterns.filter((p) => !p.startsWith("!")), negative = patterns.filter((p) => p.startsWith("!")).map((p) => p.slice(1));
@@ -5591,28 +5594,28 @@ function matchList(values, patterns, test) {
 }
 
 // src/shell.ts
-var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh", "fish"]), ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/, PREFIX_KEYWORDS = /* @__PURE__ */ new Set(["then", "else", "elif", "do", "if", "while", "until", "!", "{", "time"]), DROP_SEGMENT = /* @__PURE__ */ new Set(["for", "case", "select", "function", "fi", "done", "esac", "}", ";;"]);
+var MAX_DEPTH = 6, SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh", "fish"]), ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/, PREFIX_KEYWORDS = /* @__PURE__ */ new Set(["then", "else", "elif", "do", "if", "while", "until", "!", "{", "time"]), DROP_SEGMENT = /* @__PURE__ */ new Set(["for", "case", "select", "function", "fi", "done", "esac", "}", ";;"]);
 function parseShell(src) {
   let out = [];
   return collect(src, 0, out), out;
 }
 function collect(src, depth, out) {
-  if (depth > 6 || !src.trim()) return;
+  if (depth > MAX_DEPTH || !src.trim()) return;
   let nested = [];
   for (let raw of tokenize(src, nested)) {
     let seg = normalize(raw);
-    if (!seg) continue;
-    out.push(seg);
-    let inner = innerScript(seg.argv);
-    inner !== void 0 && collect(inner, depth + 1, out);
+    if (seg) {
+      out.push(seg);
+      for (let inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out);
+    }
   }
   for (let n of nested) collect(n, depth + 1, out);
 }
 function tokenize(src, nested) {
-  let segs = [], heredocs = [], words = [], redirects = [], inputRedirects = [], word = "", inWord = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
-    inWord && (pending === "redirect" ? redirects.push(word) : pending === "input-redirect" ? inputRedirects.push(word) : pending === "heredoc" ? heredocs.push({ delim: word, strip: heredocStrip }) : pending !== "herestring" && words.push(word), pending = null, word = "", inWord = !1);
+  let segs = [], heredocs = [], words = [], redirects = [], inputRedirects = [], stdin = [], word = "", inWord = !1, quoted = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
+    inWord && (pending === "redirect" ? redirects.push(word) : pending === "input-redirect" ? inputRedirects.push(word) : pending === "heredoc" ? heredocs.push({ delim: word, strip: heredocStrip, quoted, stdin }) : pending === "herestring" ? stdin.push(word) : words.push(word), pending = null, word = "", inWord = !1, quoted = !1);
   }, endSeg = () => {
-    endWord(), (words.length || redirects.length || inputRedirects.length) && segs.push({ words, redirects, inputRedirects }), words = [], redirects = [], inputRedirects = [], pending = null;
+    endWord(), (words.length || redirects.length || inputRedirects.length) && segs.push({ words, redirects, inputRedirects, stdin }), words = [], redirects = [], inputRedirects = [], stdin = [], pending = null;
   }, substitution = (start) => {
     let [inner, next] = readParen(src, start);
     return inner.startsWith("(") || nested.push(inner), next;
@@ -5625,16 +5628,26 @@ function tokenize(src, nested) {
         i += 2;
         continue;
       }
-      i + 1 < n && (word += src[i + 1]), inWord = !0, i += 2;
+      i + 1 < n && (word += src[i + 1]), inWord = !0, quoted = !0, i += 2;
       continue;
     }
     if (c2 === "'") {
       let end = src.indexOf("'", i + 1), stop = end === -1 ? n : end;
-      word += src.slice(i + 1, stop), inWord = !0, i = stop + 1;
+      word += src.slice(i + 1, stop), inWord = !0, quoted = !0, i = stop + 1;
+      continue;
+    }
+    if (c2 === "$" && src[i + 1] === "'") {
+      let end = i + 2;
+      for (; end < n && src[end] !== "'"; ) end += src[end] === "\\" ? 2 : 1;
+      word += ansiC(src.slice(i + 2, Math.min(end, n))), inWord = !0, quoted = !0, i = end + 1;
+      continue;
+    }
+    if (c2 === "$" && src[i + 1] === '"') {
+      i++;
       continue;
     }
     if (c2 === '"') {
-      for (inWord = !0, i++; i < n && src[i] !== '"'; )
+      for (inWord = !0, quoted = !0, i++; i < n && src[i] !== '"'; )
         if (src[i] === "\\" && i + 1 < n && '"\\$`\n'.includes(src[i + 1]))
           src[i + 1] !== `
 ` && (word += src[i + 1]), i += 2;
@@ -5675,7 +5688,12 @@ function tokenize(src, nested) {
     }
     if (c2 === `
 `) {
-      endSeg(), i++, heredocs.length && (i = skipHeredocs(src, i, heredocs), heredocs.length = 0);
+      if (endSeg(), i++, heredocs.length) {
+        i = skipHeredocs(src, i, heredocs);
+        for (let doc of heredocs)
+          doc.stdin?.push(doc.body ?? ""), doc.quoted || bodySubstitutions(doc.body ?? "", nested);
+        heredocs.length = 0;
+      }
       continue;
     }
     if (c2 === "&" && src[i + 1] === ">") {
@@ -5762,17 +5780,47 @@ function readBacktick(src, open) {
 }
 function skipHeredocs(src, start, docs) {
   let i = start;
-  for (let doc of docs)
+  for (let doc of docs) {
+    let lines = [];
     for (; i < src.length; ) {
       let nl = src.indexOf(`
 `, i), end = nl === -1 ? src.length : nl, line = src.slice(i, end);
       if (doc.strip && (line = line.replace(/^\t+/, "")), i = end + 1, line.trim() === doc.delim) break;
+      lines.push(line);
     }
+    doc.body = lines.join(`
+`);
+  }
   return Math.min(i, src.length);
+}
+function bodySubstitutions(body, nested) {
+  for (let i = 0; i < body.length; i++)
+    if (body[i] === "\\") i++;
+    else if (body[i] === "$" && body[i + 1] === "(") {
+      let [inner, next] = readParen(body, i + 1);
+      inner.startsWith("(") || nested.push(inner), i = next - 1;
+    } else if (body[i] === "`") {
+      let [inner, next] = readBacktick(body, i);
+      nested.push(inner), i = next - 1;
+    }
+}
+var ANSI_C = { a: "\x07", b: "\b", e: "\x1B", E: "\x1B", f: "\f", n: `
+`, r: "\r", t: "	", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+function ansiC(body) {
+  return body.replace(/\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c[\s\S]|[\s\S])/g, (all, e) => {
+    if (/^[xuU]./.test(e)) {
+      let code = parseInt(e.slice(1), 16);
+      return code <= 1114111 ? String.fromCodePoint(code) : all;
+    }
+    return /^[0-7]/.test(e) ? String.fromCharCode(parseInt(e, 8) & 255) : e.length === 2 && e[0] === "c" ? String.fromCharCode(e.charCodeAt(1) & 31) : ANSI_C[e] ?? all;
+  });
 }
 function basename(word) {
   let idx = word.lastIndexOf("/");
   return idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+}
+function commandName(word) {
+  return CASE_INSENSITIVE ? basename(word).toLowerCase() : basename(word);
 }
 function skipFlags(args, withValue) {
   let i = 0;
@@ -5790,7 +5838,7 @@ function stripWrappers(argv) {
       a.shift();
       continue;
     }
-    let w = basename(a[0]);
+    let w = commandName(a[0]);
     if (w === "sudo" || w === "doas") a = skipFlags(a.slice(1), SUDO_VALUE_FLAGS);
     else if (w === "env") a = skipFlags(a.slice(1), ENV_VALUE_FLAGS);
     else if (w === "command" || w === "builtin" || w === "exec" || w === "nohup" || w === "stdbuf" || w === "unbuffer")
@@ -5801,7 +5849,7 @@ function stripWrappers(argv) {
     else if (w === "xargs") a = skipFlags(a.slice(1), XARGS_VALUE_FLAGS);
     else break;
   }
-  return a.length && a[0].includes("/") && (a[0] = basename(a[0])), a[0] === "git" && (a = ["git", ...stripGitGlobals(a.slice(1))]), a;
+  return a.length && (a[0] = commandName(a[0])), a[0] === "git" && (a = ["git", ...stripGitGlobals(a.slice(1))]), a;
 }
 function stripGitGlobals(args) {
   let i = 0;
@@ -5823,15 +5871,25 @@ function normalize(raw) {
       text: argv.join(" ")
     };
 }
-function innerScript(argv) {
-  if (argv.length) {
-    if (argv[0] === "eval") return argv.slice(1).join(" ");
-    if (SHELLS.has(argv[0]))
-      for (let i = 1; i < argv.length; i++) {
-        if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(argv[i])) return argv[i + 1];
-        if (!argv[i].startsWith("-")) return;
-      }
+var SHELL_VALUE_FLAGS = /* @__PURE__ */ new Set(["--rcfile", "--init-file"]);
+function innerScript(argv, stdin) {
+  if (!argv.length) return [];
+  if (argv[0] === "eval") return [argv.slice(1).join(" ")];
+  if (!SHELLS.has(argv[0])) return [];
+  let command = !1, fromStdin = !1, i = 1;
+  for (; i < argv.length; i++) {
+    let a = argv[i];
+    if (a === "--" || a === "-") {
+      i++;
+      break;
+    }
+    if (/^[-+][a-zA-Z]+$/.test(a))
+      a[0] === "-" && a.includes("c") && (command = !0), a[0] === "-" && a.includes("s") && (fromStdin = !0), /[oO]/.test(a) && i++;
+    else if (a.startsWith("--"))
+      SHELL_VALUE_FLAGS.has(a) && i++;
+    else break;
   }
+  return command ? i < argv.length ? [argv[i]] : [] : fromStdin || i >= argv.length ? stdin : [];
 }
 var DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/, URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 function segmentPaths(seg) {
@@ -5860,8 +5918,25 @@ function segmentWrites(seg) {
   else if (MUTATORS_SKIP_FIRST.has(cmd)) out.push(...operands.slice(1));
   else if (cmd === "dd")
     for (let a of rest) a.startsWith("of=") && out.push(a.slice(3));
-  else (cmd === "sed" || cmd === "perl") && rest.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith("--in-place")) && out.push(...operands.slice(1));
+  else (cmd === "sed" || cmd === "perl") && rest.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith("--in-place")) ? out.push(...operands.slice(1)) : (cmd === "curl" || cmd === "wget") && out.push(...downloadOutputs(cmd, rest));
   return out.filter((p) => !URL_RE.test(p));
+}
+var DOWNLOAD_VALUE_FLAGS = { curl: "AbcCdDeEFhHKmoPQrtTuUwxXyYz", wget: "aABDeiIlnoOPQRtTUwX" }, DOWNLOAD_OUTPUT = { curl: ["o", "--output"], wget: ["O", "--output-document"] };
+function downloadOutputs(cmd, args) {
+  let [short, long] = DOWNLOAD_OUTPUT[cmd], out = [];
+  for (let i = 0; i < args.length; i++) {
+    let a = args[i];
+    if (a === long) out.push(args[++i] ?? "");
+    else if (a.startsWith(`${long}=`)) out.push(a.slice(long.length + 1));
+    else if (/^-[^-]/.test(a))
+      for (let j = 1; j < a.length; j++) {
+        if (!DOWNLOAD_VALUE_FLAGS[cmd].includes(a[j])) continue;
+        let value = j + 1 < a.length ? a.slice(j + 1) : args[++i];
+        a[j] === short && value !== void 0 && out.push(value);
+        break;
+      }
+  }
+  return out.filter((f) => f && f !== "-" && !DEVICE.test(f));
 }
 
 // src/engine.ts
@@ -5878,7 +5953,11 @@ function ruleMatches(rule, call, ctx) {
     let texts = call.segments.map((s) => s.text);
     if (!matchList(texts, arr(m.command), (v, p) => commandRegex(p).test(v))) return !1;
   }
-  if (m.commandLine && (!call.command || !matchList([call.command], arr(m.commandLine), (v, p) => commandLineRegex(p).test(v))) || m.path && !matchList(call.paths, arr(m.path), (v, p) => pathMatches(v, p, ctx)) || m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx)) || m.url && !matchList(call.urls, arr(m.url), (v, p) => urlRegex(p).test(v))) return !1;
+  if (m.commandLine) {
+    let lines = call.command && CASE_INSENSITIVE ? [call.command, call.command.toLowerCase()] : [call.command ?? ""];
+    if (!call.command || !matchList(lines, arr(m.commandLine), (v, p) => commandLineRegex(p).test(v))) return !1;
+  }
+  if (m.path && !matchList(call.paths, arr(m.path), (v, p) => pathMatches(v, p, ctx)) || m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx)) || m.url && !matchList(call.urls, arr(m.url), (v, p) => urlRegex(p).test(v))) return !1;
   if (m.outsideWorkspace !== void 0) {
     let root = import_node_path2.default.resolve(ctx.root);
     if (call.writes.some((p) => {
@@ -5957,6 +6036,8 @@ var SECRET_PATHS = [
 ], GUARDRAIL_FILES = [
   "polyfence.yaml",
   ".polyfence.yaml",
+  "polyfence.yml",
+  ".polyfence.yml",
   ".polyfence/**",
   "~/.config/polyfence/**",
   ".claude/settings.json",
@@ -5981,7 +6062,7 @@ var SECRET_PATHS = [
     reason: "Recursive delete of /, ~, $HOME, . or * is blocked. Delete specific paths instead.",
     match: {
       command: [
-        "/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/"
+        "/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\$\\{HOME\\}|\\$\\{HOME\\}\\/|\\$\\{HOME\\}\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/"
       ]
     }
   },
@@ -6010,7 +6091,8 @@ var SECRET_PATHS = [
     decision: "deny",
     reason: "Skipping git hooks hides failing checks. Fix the failure instead of using --no-verify.",
     match: {
-      command: ["/^git\\s+(?:commit|push|merge|rebase|am|cherry-pick)\\b.*\\s--no-verify(?:\\s|$)/", "/^git\\s+commit\\b(?:.*\\s)?-[a-zA-Z]*n[a-zA-Z]*(?:\\s|$)/"]
+      // git also accepts unambiguous abbreviations: --no-veri and --no-verif mean --no-verify.
+      command: ["/^git\\s+(?:commit|push|merge|rebase|am|cherry-pick)\\b.*\\s--no-veri(?:fy?)?(?:\\s|$)/", "/^git\\s+commit\\b(?:.*\\s)?-[a-zA-Z]*n[a-zA-Z]*(?:\\s|$)/"]
     }
   },
   {
@@ -6020,13 +6102,22 @@ var SECRET_PATHS = [
     match: { commandLine: ["/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/"] }
   },
   {
+    id: "no-hooks-path-override",
+    decision: "deny",
+    reason: "Pointing core.hooksPath elsewhere skips the repository hooks. Fix the failing check instead.",
+    // git config keys ignore case; `command` patterns never see `git -c`, so match the raw line.
+    match: {
+      commandLine: ["/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)core\\.hookspath\\s*=/i", `/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=['"]*core\\.hookspath\\b/i`]
+    }
+  },
+  {
     id: "ask-destructive-git",
     decision: "ask",
     reason: "This git command can throw away uncommitted or unpushed work.",
     match: {
       command: [
         "git reset --hard *",
-        "/^git\\s+clean\\b.*\\s-[a-zA-Z]*f/",
+        "/^git\\s+clean\\b.*\\s(?:-[a-zA-Z]*f|--force\\b)/",
         "git checkout -- *",
         "git checkout .",
         "/^git\\s+restore\\s+(?!.*--staged)/",
@@ -6046,8 +6137,10 @@ var SECRET_PATHS = [
     reason: "Piping a download straight into a shell runs unreviewed code. Download, inspect, then run.",
     match: {
       commandLine: [
-        "/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^|;&]*\\|\\s*(?:sudo\\s+)?(?:ba|z|da|k|fi)?sh\\b/",
-        `/\\b(?:ba|z)?sh\\s+(?:-c\\s+)?["']?(?:\\$\\(|<\\()\\s*(?:curl|wget)\\b/`
+        // Also through later pipes or `|&`, by path (/bin/sh), and behind sudo -E, env VAR=1 and friends.
+        "/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^;&]*\\|&?\\s*(?:(?:\\S*\\/)?(?:sudo|doas|env|command|exec|nohup)\\s+(?:[^|;&]*\\s)?)?(?:\\S*\\/)?(?:ba|z|da|k|fi)?sh\\b/",
+        `/\\b(?:ba|z)?sh\\s+(?:-c\\s+)?["']?(?:\\$\\(|<\\()\\s*(?:curl|wget)\\b/`,
+        `/(?:^|[\\s;&|(])(?:source|\\.|eval)\\s+["']?(?:<\\(|\\$\\()\\s*(?:curl|wget)\\b/`
       ]
     }
   },
@@ -6228,18 +6321,16 @@ var DECISIONS = ["allow", "ask", "deny"], OUTCOMES = [...DECISIONS, "defer"], MA
 function isObj(v) {
   return typeof v == "object" && v !== null && !Array.isArray(v);
 }
-function strList(v, where, file) {
+function strList(v, where, file, paths = !1) {
   if (v === void 0) return;
   let list = Array.isArray(v) ? v : [v];
   for (let item of list) {
     if (typeof item != "string" || !item) throw new PolicyError(`${where} must be a string or a list of strings`, file);
-    let m = /^!?\/(.+)\/([a-z]*)$/s.exec(item);
-    if (m)
-      try {
-        new RegExp(m[1], m[2]);
-      } catch (err) {
-        throw new PolicyError(`${where}: bad regex ${item}: ${err.message}`, file);
-      }
+    try {
+      regexLiteral(item.startsWith("!") ? item.slice(1) : item, paths);
+    } catch (err) {
+      throw new PolicyError(`${where}: bad regex ${item}: ${err.message}`, file);
+    }
   }
   return list;
 }
@@ -6268,7 +6359,7 @@ function parseMatch(raw, where, file) {
     match.agent = agents;
   }
   for (let key of ["rawTool", "command", "commandLine", "path", "writePath", "url"]) {
-    let list = strList(raw[key], `${where}.match.${key}`, file);
+    let list = strList(raw[key], `${where}.match.${key}`, file, key === "path" || key === "writePath");
     list && (match[key] = list);
   }
   if (raw.outsideWorkspace !== void 0) {
@@ -6421,12 +6512,12 @@ var GEMINI_TOOLS = {
   write: ["write_file"],
   edit: ["replace"],
   fetch: ["web_fetch", "google_web_search"]
-};
+}, GEMINI_SHELL = "run_shell_command", geminiAccepts = (argsPattern) => argsPattern.length <= 2048 && !/\([^)]*[*+?{].*\)[*+?{]/.test(argsPattern);
 function tomlString(s) {
   return !s.includes("'") && !/[\n\r]/.test(s) ? `'${s}'` : JSON.stringify(s);
 }
 function toArgsRegex(source) {
-  let out = "", inClass = !1;
+  let out = "", inClass = !1, lookaround = [];
   for (let i = 0; i < source.length; i++) {
     let c2 = source[i];
     if (c2 === "\\") {
@@ -6436,6 +6527,10 @@ function toArgsRegex(source) {
     if (c2 === "[" ? inClass = !0 : c2 === "]" && (inClass = !1), !(!inClass && c2 === "^" && i === 0)) {
       if (!inClass && c2 === "$") {
         out += '(?=")';
+        continue;
+      }
+      if (!inClass && c2 === "(" && lookaround.push(/^\?<?[=!]/.test(source.slice(i + 1, i + 4))), !inClass && c2 === ")" && !lookaround.pop() && source[i + 1] === "?" && source[i + 2] !== "?") {
+        out += "|)", i++;
         continue;
       }
       out += c2;
@@ -6450,11 +6545,11 @@ function commandSource(pattern) {
 function pathValueSource(glob) {
   let g = glob.startsWith("./") ? glob.slice(2) : glob;
   g.startsWith("~/") && (g = import_node_os4.default.homedir() + g.slice(1));
-  let body = pathGlobSource(g).replace(/\[\^\/\]/g, '[^/"]').replace(/\.\*/g, '[^"]*');
-  return g.startsWith("/") ? body : `(?:[^"]*/)?${body}`;
+  let body = pathGlobSource(g).replace(/\[\^\/\]/g, '[^/"]').replace(/\.\*/g, '[^"]*').replace(/\)\?/g, "|)");
+  return g.startsWith("/") ? body : `(?:[^"]*/|)${body}`;
 }
 function pathArgsPattern(patterns) {
-  if (patterns.some(isRegexLiteral) || patterns.some((p) => p.startsWith("!/"))) return null;
+  if (patterns.some(isPathRegexLiteral) || patterns.some((p) => p.startsWith("!/"))) return null;
   let pos = patterns.filter((p) => !p.startsWith("!")).map(pathValueSource), neg = patterns.filter((p) => p.startsWith("!")).map((p) => pathValueSource(p.slice(1)));
   return `"(?:file_path|absolute_path|path)":"${neg.length ? `(?!(?:${neg.join("|")})")` : ""}(?:${pos.join("|")})"`;
 }
@@ -6465,17 +6560,17 @@ function geminiRulesFor(rule) {
   if (cmd.length || line.length) {
     if (m.path || m.writePath || cmd.some((p) => p.startsWith("!")) || line.some((p) => p.startsWith("!"))) return null;
     let out = [], prefixes = cmd.map(literalPrefix), simple = prefixes.filter(Boolean);
-    simple.length && out.push({ commandPrefix: simple.map((p) => p.join(" ")) });
+    simple.length && out.push({ toolName: GEMINI_SHELL, commandPrefix: simple.map((p) => p.join(" ")) });
     for (let i = 0; i < cmd.length; i++) {
       if (prefixes[i]) continue;
       let src = commandSource(cmd[i]);
-      if (src === null) return null;
-      out.push({ commandRegex: src });
+      if (src === null || !geminiAccepts(`"command":"${src}`)) return null;
+      out.push({ toolName: GEMINI_SHELL, commandRegex: src });
     }
     for (let p of line) {
-      let src = commandSource(p);
-      if (src === null) return null;
-      out.push({ commandRegex: `.*${src.replace(/^\.\*/, "")}` });
+      let src = commandSource(p), regex = src === null ? null : `.*${src.replace(/^\.\*/, "")}`;
+      if (regex === null || !geminiAccepts(`"command":"${regex}`)) return null;
+      out.push({ toolName: GEMINI_SHELL, commandRegex: regex });
     }
     return out;
   }
@@ -6483,7 +6578,7 @@ function geminiRulesFor(rule) {
   if (!toolNames.length) return null;
   if (!paths.length) return [{ toolName: toolNames }];
   let argsPattern = pathArgsPattern(paths);
-  return argsPattern ? [{ toolName: toolNames, argsPattern }] : null;
+  return argsPattern && geminiAccepts(argsPattern) ? [{ toolName: toolNames, argsPattern }] : null;
 }
 function compileGemini(policy) {
   let out = HEADER(policy.source, "#") + `
@@ -6518,7 +6613,7 @@ function compileGemini(policy) {
 var import_node_path5 = __toESM(require("node:path"), 1);
 
 // src/adapters.ts
-var str = (v) => typeof v == "string" && v.length ? v : void 0, obj = (v) => typeof v == "object" && v !== null && !Array.isArray(v) ? v : {}, PATH_KEYS = /^(file_?path|filePath|path|paths|filename|target_?file|TargetFile|absolute_?path|AbsolutePath|notebook_path|dir_?path|DirectoryPath|directory|SearchPath|FilePath|source|destination)$/i;
+var str = (v) => typeof v == "string" && v.length ? v : void 0, obj = (v) => typeof v == "object" && v !== null && !Array.isArray(v) ? v : {}, sessionCwd = (input) => str(input.cwd) ?? process.cwd(), PATH_KEYS = /^(file_?path|filePath|path|paths|filename|target_?file|TargetFile|absolute_?path|AbsolutePath|notebook_path|dir_?path|DirectoryPath|directory|SearchPath|FilePath|source|destination)$/i;
 function guessPaths(input) {
   let out = [];
   for (let [k, v] of Object.entries(input))
@@ -6582,6 +6677,7 @@ var claude = {
   name: "claude",
   nativeAsk: !0,
   toCall: (input) => claudeLikeCall("claude", input),
+  workspace: sessionCwd,
   reply: (verdict) => claudeReply(verdict)
 };
 function shellJoin(argv) {
@@ -6624,6 +6720,7 @@ var codex = {
   name: "codex",
   nativeAsk: !1,
   toCall: codexCall,
+  workspace: sessionCwd,
   reply: (verdict, policy) => {
     let v = degradeAsk(verdict, policy);
     return v.outcome === "deny" ? claudeReply(v) : { exitCode: 0 };
@@ -6658,6 +6755,7 @@ var gemini = {
   name: "gemini",
   nativeAsk: !1,
   toCall: geminiCall,
+  workspace: sessionCwd,
   reply: (verdict, policy) => {
     let v = degradeAsk(verdict, policy);
     return v.outcome === "deny" ? { exitCode: 0, stdout: JSON.stringify({ decision: "deny", reason: message(v) }) } : v.outcome === "allow" ? { exitCode: 0, stdout: JSON.stringify({ decision: "allow", reason: message(v) }) } : { exitCode: 0, stdout: "{}" };
@@ -6684,8 +6782,9 @@ var antigravity = {
   name: "antigravity",
   nativeAsk: !0,
   toCall: agyCall,
-  reply: (verdict, _policy, call) => {
-    let reply = { decision: { deny: "deny", ask: "force_ask", allow: "allow", defer: call && (call.tool === "read" || call.tool === "fetch") ? "allow" : "ask" }[verdict.outcome] };
+  workspace: (input) => str((Array.isArray(input.workspacePaths) ? input.workspacePaths : [])[0]) ?? sessionCwd(input),
+  reply: (verdict) => {
+    let reply = { decision: { deny: "deny", ask: "force_ask", allow: "auto_approve", defer: "allow" }[verdict.outcome] };
     return verdict.outcome !== "defer" && (reply.reason = message(verdict)), { exitCode: 0, stdout: JSON.stringify(reply) };
   }
 }, ADAPTERS = { claude, codex, gemini, antigravity };
@@ -6708,28 +6807,28 @@ function runHook(stdin, agentArg) {
     return { exitCode: 0, stderr: `polyfence: hook input was not JSON; ignoring
 ` };
   }
-  let adapter = ADAPTERS[agentArg ?? detectAgent(input)], call = adapter.toCall(input), policy;
+  let adapter = ADAPTERS[agentArg ?? detectAgent(input)], workspace = adapter.workspace(input), policy;
   try {
-    policy = policyFor(call.cwd);
+    policy = policyFor(workspace);
   } catch (err) {
     let verdict2 = { outcome: "deny", reason: `policy error, failing closed: ${err.message}`, matched: [] };
-    return adapter.reply(verdict2, builtinPolicy(call.cwd), call);
+    return adapter.reply(verdict2, builtinPolicy(workspace));
   }
-  let verdict;
+  let call, verdict;
   try {
-    verdict = evaluate(policy, call);
+    call = adapter.toCall(input), verdict = evaluate(policy, call);
   } catch (err) {
     if (policy.onError === "allow") return { exitCode: 0, stderr: `polyfence: ${err.message}
 ` };
     verdict = { outcome: "deny", reason: `internal error, failing closed: ${err.message}`, matched: [] };
   }
   let sent = verdict.outcome;
-  return sent === "ask" && !adapter.nativeAsk && (sent = policy.askFallback), sent === "allow" && adapter.name === "codex" && (sent = "defer"), record(policy, call, verdict, sent), adapter.reply(verdict, policy, call);
+  return sent === "ask" && !adapter.nativeAsk && (sent = policy.askFallback), sent === "allow" && adapter.name === "codex" && (sent = "defer"), call && record(policy, call, verdict, sent), adapter.reply(verdict, policy, call);
 }
 
 // src/install.ts
 var import_node_fs3 = __toESM(require("node:fs"), 1), import_node_os5 = __toESM(require("node:os"), 1), import_node_path6 = __toESM(require("node:path"), 1);
-var MARKER = /polyfence\S*(?:\s.*)?\shook(?:\s|$)|polyfence hook/, AGY_TOOLS2 = ["run_command", "write_to_file", "replace_file_content", "multi_replace_file_content", "view_file", "read_url_content"];
+var MARKER = /polyfence\S*(?:\s.*)?\shook(?:\s|$)|polyfence hook/, AGY_TOOLS2 = ["run_command", "write_to_file", "replace_file_content", "multi_replace_file_content", "view_file", "grep_search", "read_url_content"];
 function base(scope, root) {
   return scope === "user" ? import_node_os5.default.homedir() : root;
 }
@@ -6763,7 +6862,7 @@ function hookEntries(agent, command) {
   let cmd = `${command} ${agent}`;
   switch (agent) {
     case "claude":
-      return { event: "PreToolUse", entries: [{ matcher: "*", hooks: [{ type: "command", command: cmd, timeout: 10 }] }] };
+      return { event: "PreToolUse", entries: [{ matcher: "*", hooks: [{ type: "command", command: cmd, timeout: 10, onFailure: "block" }] }] };
     case "codex":
       return { event: "PreToolUse", entries: [{ matcher: ".*", hooks: [{ type: "command", command: cmd, timeout: 10 }] }] };
     case "gemini":
@@ -7152,8 +7251,8 @@ async function main(argv) {
   }
 }
 main(process.argv.slice(2)).catch((err) => {
-  process.argv[2] === "hook" && (process.stderr.write(`polyfence: ${err.message}
-`), process.exit(0)), fail(err.stack ?? String(err));
+  process.argv[2] === "hook" && (process.stderr.write(`polyfence: internal error, failing closed: ${err.message}
+`), process.exit(2)), fail(err.stack ?? String(err));
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

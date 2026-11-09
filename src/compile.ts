@@ -8,7 +8,7 @@
  * hook-enforced and is listed in a comment so nothing is silently dropped.
  */
 import os from 'node:os';
-import { commandGlobSource, isRegexLiteral, pathGlobSource } from './patterns.js';
+import { commandGlobSource, isPathRegexLiteral, isRegexLiteral, pathGlobSource } from './patterns.js';
 import type { Policy, Rule, ToolKind } from './types.js';
 
 const arr = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
@@ -73,6 +73,16 @@ const GEMINI_TOOLS: Partial<Record<ToolKind, string[]>> = {
   fetch: ['web_fetch', 'google_web_search'],
 };
 
+/** Gemini requires a toolName on every rule, and exactly this one with commandPrefix/commandRegex. */
+const GEMINI_SHELL = 'run_shell_command';
+
+/**
+ * Gemini drops, with a warning, any argsPattern that fails its ReDoS heuristic
+ * (isSafeRegExp in gemini-cli's policy/utils.ts): over 2048 characters, or a
+ * group containing a quantifier that is itself quantified.
+ */
+const geminiAccepts = (argsPattern: string) => argsPattern.length <= 2048 && !/\([^)]*[*+?{].*\)[*+?{]/.test(argsPattern);
+
 function tomlString(s: string): string {
   if (!s.includes("'") && !/[\n\r]/.test(s)) return `'${s}'`;
   return JSON.stringify(s);
@@ -81,11 +91,13 @@ function tomlString(s: string): string {
 /**
  * Gemini matches `commandRegex` against the JSON-encoded args right after
  * `"command":"`, so the start is already anchored and `$` must become "end of
- * the JSON string".
+ * the JSON string". Optional groups `(x)?` become `(x|)`, which matches the
+ * same strings but passes Gemini's ReDoS check.
  */
 function toArgsRegex(source: string): string {
   let out = '';
   let inClass = false;
+  const lookaround: boolean[] = [];
   for (let i = 0; i < source.length; i++) {
     const c = source[i];
     if (c === '\\') {
@@ -98,6 +110,12 @@ function toArgsRegex(source: string): string {
     if (!inClass && c === '^' && i === 0) continue;
     if (!inClass && c === '$') {
       out += '(?=")';
+      continue;
+    }
+    if (!inClass && c === '(') lookaround.push(/^\?<?[=!]/.test(source.slice(i + 1, i + 4)));
+    if (!inClass && c === ')' && !lookaround.pop() && source[i + 1] === '?' && source[i + 2] !== '?') {
+      out += '|)';
+      i++;
       continue;
     }
     out += c;
@@ -114,12 +132,13 @@ function commandSource(pattern: string): string | null {
 function pathValueSource(glob: string): string {
   let g = glob.startsWith('./') ? glob.slice(2) : glob;
   if (g.startsWith('~/')) g = os.homedir() + g.slice(1);
-  const body = pathGlobSource(g).replace(/\[\^\/\]/g, '[^/"]').replace(/\.\*/g, '[^"]*');
-  return g.startsWith('/') ? body : `(?:[^"]*/)?${body}`;
+  // `(?:x|)` rather than `(?:x)?`, which Gemini's ReDoS check rejects (see toArgsRegex).
+  const body = pathGlobSource(g).replace(/\[\^\/\]/g, '[^/"]').replace(/\.\*/g, '[^"]*').replace(/\)\?/g, '|)');
+  return g.startsWith('/') ? body : `(?:[^"]*/|)${body}`;
 }
 
 function pathArgsPattern(patterns: string[]): string | null {
-  if (patterns.some(isRegexLiteral) || patterns.some((p) => p.startsWith('!/'))) return null;
+  if (patterns.some(isPathRegexLiteral) || patterns.some((p) => p.startsWith('!/'))) return null;
   const pos = patterns.filter((p) => !p.startsWith('!')).map(pathValueSource);
   const neg = patterns.filter((p) => p.startsWith('!')).map((p) => pathValueSource(p.slice(1)));
   const lookahead = neg.length ? `(?!(?:${neg.join('|')})")` : '';
@@ -144,17 +163,18 @@ function geminiRulesFor(rule: Rule): GeminiRule[] | null {
     const out: GeminiRule[] = [];
     const prefixes = cmd.map(literalPrefix);
     const simple = prefixes.filter(Boolean) as string[][];
-    if (simple.length) out.push({ commandPrefix: simple.map((p) => p.join(' ')) });
+    if (simple.length) out.push({ toolName: GEMINI_SHELL, commandPrefix: simple.map((p) => p.join(' ')) });
     for (let i = 0; i < cmd.length; i++) {
       if (prefixes[i]) continue;
       const src = commandSource(cmd[i]);
-      if (src === null) return null;
-      out.push({ commandRegex: src });
+      if (src === null || !geminiAccepts(`"command":"${src}`)) return null;
+      out.push({ toolName: GEMINI_SHELL, commandRegex: src });
     }
     for (const p of line) {
       const src = commandSource(p);
-      if (src === null) return null;
-      out.push({ commandRegex: `.*${src.replace(/^\.\*/, '')}` });
+      const regex = src === null ? null : `.*${src.replace(/^\.\*/, '')}`;
+      if (regex === null || !geminiAccepts(`"command":"${regex}`)) return null;
+      out.push({ toolName: GEMINI_SHELL, commandRegex: regex });
     }
     return out;
   }
@@ -165,7 +185,7 @@ function geminiRulesFor(rule: Rule): GeminiRule[] | null {
   if (!toolNames.length) return null;
   if (!paths.length) return [{ toolName: toolNames }];
   const argsPattern = pathArgsPattern(paths);
-  return argsPattern ? [{ toolName: toolNames, argsPattern }] : null;
+  return argsPattern && geminiAccepts(argsPattern) ? [{ toolName: toolNames, argsPattern }] : null;
 }
 
 export function compileGemini(policy: Policy): string {

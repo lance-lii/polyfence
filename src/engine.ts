@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, urlRegex, type PathContext } from './patterns.js';
+import { CASE_INSENSITIVE, commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, urlRegex, type PathContext } from './patterns.js';
 import { parseShell, segmentPaths, segmentUrls, segmentWrites } from './shell.js';
 import type { AgentName, MatchSpec, Policy, Rule, ToolCall, ToolKind, Verdict } from './types.js';
 
@@ -27,7 +27,9 @@ export function ruleMatches(rule: Rule, call: ToolCall, ctx: PathContext): boole
     if (!matchList(texts, arr(m.command), (v, p) => commandRegex(p).test(v))) return false;
   }
   if (m.commandLine) {
-    if (!call.command || !matchList([call.command], arr(m.commandLine), (v, p) => commandLineRegex(p).test(v))) return false;
+    // Where file names ignore case, `SUDO` and `CURL ... | SH` run sudo and sh: check the line in lower case too.
+    const lines = call.command && CASE_INSENSITIVE ? [call.command, call.command.toLowerCase()] : [call.command ?? ''];
+    if (!call.command || !matchList(lines, arr(m.commandLine), (v, p) => commandLineRegex(p).test(v))) return false;
   }
   if (m.path && !matchList(call.paths, arr(m.path), (v, p) => pathMatches(v, p, ctx))) return false;
   if (m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx))) return false;

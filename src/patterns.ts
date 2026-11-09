@@ -13,6 +13,11 @@
 import os from 'node:os';
 import path from 'node:path';
 
+/** macOS and Windows file systems ignore case by default: there `.ENV` is `.env` and `GIT` runs git. */
+export const CASE_INSENSITIVE = process.platform === 'darwin' || process.platform === 'win32';
+const fold = (s: string) => (CASE_INSENSITIVE ? s.toLowerCase() : s);
+const PATH_FLAGS = CASE_INSENSITIVE ? 'i' : '';
+
 const cache = new Map<string, RegExp>();
 
 function escapeRe(s: string): string {
@@ -20,13 +25,23 @@ function escapeRe(s: string): string {
 }
 
 const REGEX_LITERAL = /^\/(.+)\/([a-z]*)$/s;
+/**
+ * Path patterns are often absolute paths (`/etc/hosts`, `/etc/`), so there `/.../flags` is a
+ * regex only if the flags are real and the body uses regex syntax: `\`, `^`, `$`, `|`, `(` or `[`.
+ */
+const PATH_REGEX_LITERAL = /^\/(.*[\\^$|([].*)\/([dgimsuyv]*)$/s;
 
 export function isRegexLiteral(pattern: string): boolean {
   return REGEX_LITERAL.test(pattern);
 }
 
-function regexLiteral(pattern: string): RegExp | undefined {
-  const m = REGEX_LITERAL.exec(pattern);
+export function isPathRegexLiteral(pattern: string): boolean {
+  return PATH_REGEX_LITERAL.test(pattern);
+}
+
+/** The RegExp of a `/regex/flags` pattern (throws if it is invalid), or undefined for a glob. */
+export function regexLiteral(pattern: string, forPath = false): RegExp | undefined {
+  const m = (forPath ? PATH_REGEX_LITERAL : REGEX_LITERAL).exec(pattern);
   return m ? new RegExp(m[1], m[2]) : undefined;
 }
 
@@ -113,9 +128,10 @@ export function pathGlobSource(glob: string): string {
 }
 
 export function expandHome(p: string): string {
-  if (p === '~') return os.homedir();
+  if (p === '~' || p === '$HOME' || p === '${HOME}') return os.homedir();
   if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
   if (p.startsWith('$HOME/')) return path.join(os.homedir(), p.slice(6));
+  if (p.startsWith('${HOME}/')) return path.join(os.homedir(), p.slice(8));
   return p;
 }
 
@@ -131,30 +147,30 @@ export function resolvePath(p: string, ctx: PathContext): string {
 }
 
 export function isInside(abs: string, root: string): boolean {
-  const rel = path.relative(root, abs);
+  const rel = path.relative(fold(root), fold(abs));
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
 /** Does one concrete path match one (non-negated) path glob? */
 export function pathMatches(p: string, pattern: string, ctx: PathContext): boolean {
   const abs = resolvePath(p, ctx);
-  const lit = regexLiteral(pattern);
+  const lit = regexLiteral(pattern, true);
   if (lit) return lit.test(abs);
   let glob = pattern.startsWith('./') ? pattern.slice(2) : pattern;
   if (glob.endsWith('/')) glob += '**';
   if (!glob.includes('/')) {
     // Like .gitignore: a bare name matches at any depth.
-    const re = memo('base', glob, () => new RegExp('^' + pathGlobSource(glob) + '$'));
+    const re = memo('base', glob, () => new RegExp('^' + pathGlobSource(glob) + '$', PATH_FLAGS));
     return re.test(abs.slice(abs.lastIndexOf('/') + 1));
   }
   const expanded = toPosix(expandHome(glob));
   if (expanded.startsWith('/')) {
-    return memo('abs', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$')).test(abs);
+    return memo('abs', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$', PATH_FLAGS)).test(abs);
   }
   const rootAbs = toPosix(path.resolve(ctx.root));
   if (!isInside(abs, rootAbs)) return false;
-  const rel = toPosix(path.relative(rootAbs, abs));
-  return memo('rel', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$')).test(rel);
+  const rel = toPosix(path.relative(fold(rootAbs), fold(abs)));
+  return memo('rel', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$', PATH_FLAGS)).test(rel);
 }
 
 /**

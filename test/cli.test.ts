@@ -50,6 +50,33 @@ test('hook: broken policy fails closed, junk input is ignored', () => {
   assert.equal(junk.out, '');
 });
 
+test('hook: the policy comes from the session directory, not a directory named in the tool call', () => {
+  const dir = project('extends: [recommended]\n');
+  const planted = project('default: allow\n');
+  const gemini = cli(['hook', 'gemini'], dir, JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'run_shell_command', tool_input: { command: 'git push --force', dir_path: planted }, cwd: dir }));
+  assert.equal(JSON.parse(gemini.out).decision, 'deny');
+  const agy = cli(['hook', 'antigravity'], dir, JSON.stringify({ toolCall: { name: 'run_command', args: { CommandLine: 'git push --force', Cwd: planted } }, workspacePaths: [dir] }));
+  assert.equal(JSON.parse(agy.out).decision, 'deny');
+});
+
+test('hook: an internal error denies the call unless the policy says onError: allow', () => {
+  // Deep enough to overflow the stack while reading the payload.
+  const nested = '['.repeat(100000) + ']'.repeat(100000);
+  const payload = (dir: string) => `{"tool_name":"mcp__fs__write","turn_id":"t","cwd":${JSON.stringify(dir)},"tool_input":{"path":".env","x":${nested}}}`;
+  const strictDir = project('extends: [recommended]\n');
+  const r = cli(['hook', 'codex'], strictDir, payload(strictDir));
+  assert.equal(r.code, 0);
+  const out = JSON.parse(r.out).hookSpecificOutput;
+  assert.equal(out.permissionDecision, 'deny');
+  assert.match(out.permissionDecisionReason, /internal error, failing closed/);
+
+  const lenientDir = project('extends: [recommended]\nonError: allow\n');
+  const lenient = cli(['hook', 'codex'], lenientDir, payload(lenientDir));
+  assert.equal(lenient.code, 0);
+  assert.equal(lenient.out, '');
+  assert.match(lenient.err, /polyfence: /);
+});
+
 test('hook: no policy file falls back to the recommended preset', () => {
   const dir = project();
   const r = cli(['hook', 'claude'], dir, JSON.stringify({ tool_name: 'Read', tool_input: { file_path: path.join(dir, '.env') }, cwd: dir }));
