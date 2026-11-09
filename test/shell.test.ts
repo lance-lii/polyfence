@@ -36,6 +36,41 @@ test('recurses into bash -c, eval, $(...) and backticks', () => {
   assert.ok(!texts('echo $((1 + 2))').some((t) => t.startsWith('1')));
 });
 
+test('finds the -c script after shell options', () => {
+  assert.ok(texts(`bash -o pipefail -c 'git push --force'`).includes('git push --force'));
+  assert.ok(texts(`bash -eo pipefail -c 'rm -rf ~'`).includes('rm -rf ~'));
+  assert.ok(texts(`bash -O extglob +o posix --rcfile rc -c 'ls x'`).includes('ls x'));
+  assert.ok(texts(`sh +e -c 'ls x'`).includes('ls x'));
+  assert.ok(texts(`sh -c -e 'ls x'`).includes('ls x'));
+  assert.ok(texts(`sh -c -- 'ls x'`).includes('ls x'));
+  assert.deepEqual(texts('bash -o pipefail build.sh'), ['bash -o pipefail build.sh']);
+});
+
+test('parses heredocs and herestrings that a shell runs', () => {
+  assert.ok(texts("bash <<'EOF'\nls -la\nEOF").includes('ls -la'));
+  assert.ok(texts('sh -s -- prod <<EOF\nmake deploy\nEOF').includes('make deploy'));
+  assert.ok(texts('bash <<EOF | tee log\nmake\nEOF').includes('make'));
+  assert.ok(texts(`bash <<< 'make test'`).includes('make test'));
+  assert.deepEqual(texts('bash run.sh <<EOF\nmake\nEOF'), ['bash run.sh']);
+  assert.deepEqual(texts('python3 - <<EOF\nmake\nEOF'), ['python3 -']);
+});
+
+test('finds command substitutions in unquoted heredoc bodies only', () => {
+  const t = texts('cat <<EOF > out.txt\nuser: $(whoami), host: `hostname`, cost: \\$(none)\nEOF');
+  assert.ok(t.includes('whoami') && t.includes('hostname'), JSON.stringify(t));
+  assert.ok(!t.includes('none'), JSON.stringify(t));
+  for (const delim of [`'EOF'`, `"EOF"`, '\\EOF', `E'O'F`]) {
+    assert.deepEqual(texts(`cat <<${delim}\n$(whoami)\nEOF`), ['cat'], delim);
+  }
+});
+
+test('decodes ANSI-C and locale quoting', () => {
+  assert.deepEqual(texts(`$'git' push $"--force"`), ['git push --force']);
+  assert.deepEqual(texts(`$'\\x67it' push $'\\055f'`), ['git push -f']);
+  assert.deepEqual(parseShell(`printf $'a\\tb\\'c\\\\'`)[0].argv, ['printf', "a\tb'c\\"]);
+  assert.deepEqual(texts(`IFS=$'\\n' read -r line`), ['read -r line']);
+});
+
 test('skips heredoc bodies', () => {
   const src = `git commit -m "$(cat <<'EOF'
 rm -rf / is now handled (closes #12)
@@ -101,6 +136,10 @@ test('extracts touched and written paths', () => {
   const [mixed] = parseShell('cmd > out.txt < in.txt');
   assert.deepEqual(segmentWrites(mixed), ['out.txt']);
   assert.deepEqual(segmentPaths(mixed), ['out.txt', 'in.txt']);
+  assert.deepEqual(w('curl -fsSLo out.bin https://x.dev/a -o b.txt https://x.dev/b'), ['out.bin', 'b.txt']);
+  assert.deepEqual(w('curl -H "X-Out: -o" -X POST https://x.dev'), []);
+  assert.deepEqual(w('curl -o /dev/null https://x.dev && wget -qO- https://x.dev'), []);
+  assert.deepEqual(w('wget -nv --output-document=page.html https://x.dev'), ['page.html']);
 });
 
 test('survives hostile input', () => {

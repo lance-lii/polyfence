@@ -61,7 +61,7 @@ Either way, every shell command, file read, write, edit and fetch from those age
 ```yaml
 # polyfence.yaml
 version: 1
-extends: [recommended]     # 16 built-in rules (see below)
+extends: [recommended]     # 17 built-in rules (see below)
 
 rules:
   - id: protect-prod-config
@@ -94,7 +94,7 @@ The `reason` goes back to the agent, so it changes course instead of retrying th
 - **🧱 Two layers.** The hook is the main enforcement point. `install` also compiles what it can into Codex `prefix_rule`s and Gemini policy-engine TOML, so a missing or broken hook still leaves the native layer in place.
 - **📜 Audit log.** Every decision lands in `.polyfence/audit.jsonl`. `polyfence log --deny` shows you what your agents tried.
 - **⚡ Fast and small.** ~30 ms per hook call. Zero runtime dependencies: it ships as one bundled file. No daemon, no network, no telemetry.
-- **🧯 Fails closed.** A broken policy file denies tool calls with a clear message instead of silently letting everything through.
+- **🧯 Fails closed.** A broken policy file or an internal error denies tool calls with a clear message instead of silently letting everything through. If the hook can't run at all, only Claude Code can be told to block; see [Agent support](#agent-support).
 
 ## What `recommended` covers
 
@@ -106,10 +106,11 @@ Run `polyfence presets` for the full list.
 | `no-disk-wipe` | deny | `mkfs`, `dd of=/dev/...`, `diskutil erase*` |
 | `no-force-push` | deny | `git push --force`, `-f`, `+refspec` |
 | `ask-force-with-lease` | ask | `git push --force-with-lease` |
-| `no-hook-bypass` | deny | `git commit --no-verify`, `-n` |
+| `no-hook-bypass` | deny | `git commit --no-verify` (also abbreviated, e.g. `--no-veri`), `-n` |
 | `no-husky-bypass` | deny | `HUSKY=0 git ...` |
+| `no-hooks-path-override` | deny | `git -c core.hooksPath=...`, `GIT_CONFIG_KEY_0=core.hooksPath` |
 | `ask-destructive-git` | ask | `reset --hard`, `clean -f`, `checkout -- .`, `branch -D`, remote branch deletes |
-| `no-pipe-to-shell` | deny | `curl ... \| sh`, `bash <(curl ...)`, `sh -c "$(wget ...)"` |
+| `no-pipe-to-shell` | deny | `curl ... \| sh` (also `\| /bin/sh`, `\| sudo -E bash`), `bash <(curl ...)`, `sh -c "$(wget ...)"`, `source <(curl ...)`, `eval "$(curl ...)"` |
 | `protect-secrets` | deny | `.env*` (not `.env.example`), `*.pem`, `*.key`, SSH keys, cloud credentials |
 | `protect-guardrails` | deny | writes to polyfence and agent config files |
 | `ask-outside-workspace` | ask | writes outside the project (temp dirs are fine) |
@@ -146,16 +147,19 @@ Ordinary work (`npm test`, `git status`, `rm -rf node_modules`, `git push origin
 | Hook enforcement | ✅ | ✅ | ✅ | 🧪 experimental |
 | `deny` | ✅ | ✅ | ✅ | ✅ |
 | `ask` | ✅ native | ↪ `askFallback` | ↪ `askFallback` | ✅ `force_ask` |
-| `allow` (auto-approve) | ✅ | ↪ defer | ✅ | ⚠️ version-dependent |
+| `allow` (auto-approve) | ✅ | ↪ defer | ✅ | ✅ `auto_approve` |
 | Static native rules | — (hook only) | ✅ `prefix_rule` | ✅ policy TOML | — |
 | Shell, file and fetch tools | ✅ | ✅ incl. `apply_patch` | ✅ | ✅ |
+| Blocks when the hook can't run | ✅ `onFailure: block` | ❌ | ❌ | ❓ undocumented |
+
+Errors inside polyfence follow `onError` (default `deny`), and if polyfence fails before it has read the policy it exits with code 2, which blocks the call in Claude Code, Codex and Gemini CLI. A hook that can't run at all is up to the agent: polyfence or `node` missing from `PATH`, the process killed, or a timeout. `install` sets [`"onFailure": "block"`](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails) for Claude Code (v2.1.295 or later), so those calls are blocked. Codex and Gemini CLI have no such setting and run the tool call when a hook fails or times out, and Antigravity doesn't document what it does. On those, check `polyfence doctor` after installing.
 
 Codex and Gemini hooks can't open an approval prompt. For those, `ask` follows `askFallback`: `deny` (default) blocks with a message telling the agent to ask you, and `defer` hands the call to the agent's own approval flow. With `askFallback: defer`, Codex still prompts you for shell commands, because `install` compiles your `ask` rules into native `prompt` rules.
 
 Notes:
-- **Codex** loads project-level `.codex/` hooks and rules only for trusted projects. Use `--scope user` to install globally.
+- **Codex** [runs a hook only after you trust it](https://learn.chatgpt.com/docs/hooks): open `/hooks` in Codex after `polyfence install` and approve the polyfence hook, or it does nothing. Trust is tied to the hook's definition, so approve it again if it changes. Codex also loads project-level `.codex/` hooks and rules only for trusted projects. Use `--scope user` to install globally.
 - **Gemini CLI** currently ignores workspace-level policy files. Use `--scope user` if you want the static TOML layer active. The hook works at either scope.
-- **Antigravity** replaced Gemini CLI for most users in June 2026, and its hook format is still settling. Please [open an issue](../../issues) if something looks off.
+- **Antigravity** replaced Gemini CLI for most users in June 2026, and its hook format is still settling. Its hooks must always return a [decision](https://antigravity.google/docs/hooks): polyfence sends `deny`, `force_ask` for `ask`, `auto_approve` for `allow`, and `allow` when no rule matches, which leaves the call to Antigravity's own settings. Please [open an issue](../../issues) if something looks off.
 
 ## CLI
 
@@ -228,16 +232,18 @@ tests:
 | `command` | each parsed command, wrappers removed (`git push -f origin`) | anchored. `*` matches anything. A trailing ` *` also matches nothing, so `git push *` matches `git push`. |
 | `commandLine` | the whole raw command string | unanchored search |
 | `path` | every path a call touches: file-tool paths plus path-like shell arguments and redirect targets | gitignore-style. A bare name (`.env`) matches at any depth, `dir/**` is rooted at the project, `~/` is your home, `**`, `*`, `?`, `{a,b}` |
-| `writePath` | only paths the call modifies: write/edit tools, redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`/`chmod`... | same as `path` |
+| `writePath` | only paths the call modifies: write/edit tools, redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`/`chmod`/`curl -o`/`wget -O`... | same as `path` |
 | `url` | `WebFetch`-style URLs, plus URLs in shell arguments | anchored, case-insensitive |
 
-Any pattern can be a regex instead: `/^git\s+push\b/i`. Start a pattern with `!` to exclude matches.
+Any pattern can be a regex instead: `/^git\s+push\b/i`. Start a pattern with `!` to exclude matches. In `path` and `writePath`, `/.../` counts as a regex only if it uses regex syntax (`\`, `^`, `$`, `|`, `(` or `[`), so `/etc/hosts` and `/etc/` are absolute paths.
+
+On macOS and Windows, where file names ignore case, path globs match in any case (`.env` also catches `cat .ENV`), and command names are compared in lower case (`GIT push -f` is `git push -f`). `commandLine` patterns are also tried against the command in lower case. Regex path patterns keep the flags you give them, and the native Codex and Gemini rules stay case-sensitive.
 
 When a call matches more than one rule, the most restrictive one wins. To make an exception, narrow the rule with a `!pattern` rather than adding an `allow` rule.
 
 ### Where the policy comes from
 
-The hook looks for `polyfence.yaml` (or `.polyfence.yaml`) from the agent's working directory upward. If there isn't one, it uses `~/.config/polyfence/polyfence.yaml`. If that doesn't exist either, it falls back to the built-in `recommended` preset.
+The hook looks for `polyfence.yaml` (or `.polyfence.yaml`, `polyfence.yml`, `.polyfence.yml`) from the session's working directory upward (for Antigravity, the first workspace folder). A directory named inside the tool call, such as Gemini's `dir_path` or Antigravity's `Cwd`, is never used to find the policy, because the agent chooses it. If there isn't one, it uses `~/.config/polyfence/polyfence.yaml`. If that doesn't exist either, it falls back to the built-in `recommended` preset.
 
 ## Guardrails in CI
 
@@ -258,6 +264,13 @@ jobs:
 ## FAQ
 
 **Is this a sandbox?** No. Polyfence decides which tool calls an agent may make. It doesn't isolate processes. A determined program can always find a way past pattern rules (writing a script and then running it, for example). Use polyfence to keep well-meaning agents away from foot-guns, and run untrusted work in a container or VM as well.
+
+**What can't the rules see?** Anything that is only decided when the command runs. These still get through today:
+- Commands built at run time: variables (`x=git; $x push -f`), brace expansion (`{git,push} --force`), git aliases (`git -c alias.p='push -f' p`), and globs the shell expands into protected files (`cat .env*`).
+- Code run by another interpreter: `python -c`, `node -e`, or a script the agent writes and then runs.
+- Shell input that isn't a download or a heredoc the shell reads, such as `echo 'git push -f' | bash` or `cat <<EOF | sh`.
+- `cd` inside one command (`cd ~/.aws && cat credentials`), and wrapper options polyfence doesn't parse: `find -exec`, `env -S`, `sudo -iu user` (still asked about as `sudo`).
+- Writes it doesn't model: `curl -O` and plain `wget URL` (named after the URL), `curl --output-dir`, `git checkout <ref> -- <file>`, unpacked archives, and persistent settings such as `git config core.hooksPath`.
 
 **Does it phone home?** No. It reads your policy, makes a decision locally and appends one line to a local log.
 

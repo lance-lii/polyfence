@@ -31,6 +31,8 @@ const SECRET_PATHS = [
 const GUARDRAIL_FILES = [
   'polyfence.yaml',
   '.polyfence.yaml',
+  'polyfence.yml',
+  '.polyfence.yml',
   '.polyfence/**',
   '~/.config/polyfence/**',
   '.claude/settings.json',
@@ -57,7 +59,7 @@ const recommended: PresetRule[] = [
     reason: 'Recursive delete of /, ~, $HOME, . or * is blocked. Delete specific paths instead.',
     match: {
       command: [
-        '/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/',
+        '/^rm\\s(?:.*\\s)?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\s(?:.*\\s)?(?:\\/|\\/\\*|~|~\\/|~\\/\\*|\\$HOME|\\$HOME\\/|\\$HOME\\/\\*|\\$\\{HOME\\}|\\$\\{HOME\\}\\/|\\$\\{HOME\\}\\/\\*|\\.|\\.\\/|\\.\\/\\*|\\.\\.|\\.\\.\\/|\\*)(?:\\s|$)/',
       ],
     },
   },
@@ -86,7 +88,8 @@ const recommended: PresetRule[] = [
     decision: 'deny',
     reason: 'Skipping git hooks hides failing checks. Fix the failure instead of using --no-verify.',
     match: {
-      command: ['/^git\\s+(?:commit|push|merge|rebase|am|cherry-pick)\\b.*\\s--no-verify(?:\\s|$)/', '/^git\\s+commit\\b(?:.*\\s)?-[a-zA-Z]*n[a-zA-Z]*(?:\\s|$)/'],
+      // git also accepts unambiguous abbreviations: --no-veri and --no-verif mean --no-verify.
+      command: ['/^git\\s+(?:commit|push|merge|rebase|am|cherry-pick)\\b.*\\s--no-veri(?:fy?)?(?:\\s|$)/', '/^git\\s+commit\\b(?:.*\\s)?-[a-zA-Z]*n[a-zA-Z]*(?:\\s|$)/'],
     },
   },
   {
@@ -96,13 +99,22 @@ const recommended: PresetRule[] = [
     match: { commandLine: ['/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/'] },
   },
   {
+    id: 'no-hooks-path-override',
+    decision: 'deny',
+    reason: 'Pointing core.hooksPath elsewhere skips the repository hooks. Fix the failing check instead.',
+    // git config keys ignore case; `command` patterns never see `git -c`, so match the raw line.
+    match: {
+      commandLine: ['/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)core\\.hookspath\\s*=/i', '/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=[\'"]*core\\.hookspath\\b/i'],
+    },
+  },
+  {
     id: 'ask-destructive-git',
     decision: 'ask',
     reason: 'This git command can throw away uncommitted or unpushed work.',
     match: {
       command: [
         'git reset --hard *',
-        '/^git\\s+clean\\b.*\\s-[a-zA-Z]*f/',
+        '/^git\\s+clean\\b.*\\s(?:-[a-zA-Z]*f|--force\\b)/',
         'git checkout -- *',
         'git checkout .',
         '/^git\\s+restore\\s+(?!.*--staged)/',
@@ -122,8 +134,10 @@ const recommended: PresetRule[] = [
     reason: 'Piping a download straight into a shell runs unreviewed code. Download, inspect, then run.',
     match: {
       commandLine: [
-        '/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^|;&]*\\|\\s*(?:sudo\\s+)?(?:ba|z|da|k|fi)?sh\\b/',
+        // Also through later pipes or `|&`, by path (/bin/sh), and behind sudo -E, env VAR=1 and friends.
+        '/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^;&]*\\|&?\\s*(?:(?:\\S*\\/)?(?:sudo|doas|env|command|exec|nohup)\\s+(?:[^|;&]*\\s)?)?(?:\\S*\\/)?(?:ba|z|da|k|fi)?sh\\b/',
         '/\\b(?:ba|z)?sh\\s+(?:-c\\s+)?["\']?(?:\\$\\(|<\\()\\s*(?:curl|wget)\\b/',
+        '/(?:^|[\\s;&|(])(?:source|\\.|eval)\\s+["\']?(?:<\\(|\\$\\()\\s*(?:curl|wget)\\b/',
       ],
     },
   },
