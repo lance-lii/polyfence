@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { CASE_INSENSITIVE, commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, urlRegex, type PathContext } from './patterns.js';
+import { CASE_INSENSITIVE, HOST, commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, urlRegex, type PathContext } from './patterns.js';
 import { parseScript, segmentPaths, segmentReads, segmentUrls, segmentWrites } from './shell.js';
 import type { AgentName, MatchSpec, Policy, Rule, ToolCall, ToolKind, Verdict } from './types.js';
 
@@ -24,8 +24,16 @@ export function ruleMatches(rule: Rule, call: ToolCall, ctx: PathContext): boole
   if (m.rawTool && !matchList([call.rawTool], arr(m.rawTool), (v, p) => urlRegex(p).test(v))) return false;
   if (m.command) {
     // Arguments that contain whitespace are free text here, so a flag pattern can't match a commit message.
-    const texts = call.segments.map((s) => s.matchText);
-    if (!matchList(texts, arr(m.command), (v, p) => commandRegex(p).test(v))) return false;
+    const patterns = arr(m.command);
+    const positive = patterns.filter((p) => !p.startsWith('!'));
+    const negative = patterns.filter((p) => p.startsWith('!')).map((p) => p.slice(1));
+    const excluded = (text: string) => negative.some((p) => commandRegex(p).test(text));
+    // A positive pattern may also match a command the segment wraps (`op run -- git push -f`).
+    // A negated pattern excludes the segment whether it matches the whole of it or that command.
+    const hit = call.segments.some(
+      (s) => !excluded(s.matchText) && [s.matchText, ...s.tails].some((text) => positive.some((p) => commandRegex(p).test(text)) && !excluded(text)),
+    );
+    if (!hit) return false;
   }
   if (m.commandLine) {
     // Where file names ignore case, `SUDO` and `CURL ... | SH` run sudo and sh: check the line in lower case too.
@@ -41,10 +49,11 @@ export function ruleMatches(rule: Rule, call: ToolCall, ctx: PathContext): boole
   if (m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx))) return false;
   if (m.url && !matchList(call.urls, arr(m.url), (v, p) => urlRegex(p).test(v))) return false;
   if (m.outsideWorkspace !== undefined) {
-    const root = path.resolve(ctx.root);
+    const pf = ctx.platform ?? HOST;
+    const root = pf.path.resolve(ctx.root);
     const outside = call.writes.some((p) => {
       const abs = resolvePath(p, ctx);
-      return !isInside(abs, root) && !TEMP_ROOTS.some((t) => isInside(abs, t));
+      return !isInside(abs, root, pf) && !TEMP_ROOTS.some((t) => isInside(abs, t, pf));
     });
     if (outside !== m.outsideWorkspace) return false;
   }
@@ -68,17 +77,22 @@ interface Base {
   cwd: string;
 }
 
-export function shellCall(command: string, base: Base): ToolCall {
-  const { segments, scripts } = parseScript(command);
+export function shellCall(command: string, base: Base, opts: { powershell?: boolean } = {}): ToolCall {
+  const { segments, scripts } = parseScript(command, opts);
+  // PowerShell accepts `\` in paths on every platform; path rules compare with `/`.
+  const paths = (of: (s: (typeof segments)[number]) => string[]) => {
+    const found = segments.flatMap(of);
+    return opts.powershell ? found.map((p) => p.replace(/\\/g, '/')) : found;
+  };
   return {
     ...base,
     tool: 'shell',
     command,
     segments,
     scripts,
-    paths: segments.flatMap(segmentPaths),
-    reads: segments.flatMap(segmentReads),
-    writes: segments.flatMap(segmentWrites),
+    paths: paths(segmentPaths),
+    reads: paths(segmentReads),
+    writes: paths(segmentWrites),
     urls: segments.flatMap(segmentUrls),
   };
 }

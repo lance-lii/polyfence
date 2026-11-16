@@ -7,7 +7,7 @@ import { compileCodex, compileGemini } from './compile.js';
 import { describeCall, evaluate, fetchCall, fileCall, shellCall } from './engine.js';
 import { ownPolicy, policyFor, runHook } from './hook.js';
 import { install, isInstalled, uninstall, type Change, type Scope } from './install.js';
-import { PolicyError, findProjectPolicyFile, isTrusted, loadPolicy, loosens, setTrust } from './policy.js';
+import { PolicyError, findProjectPolicyFile, isTrusted, loadPolicy, setTrust } from './policy.js';
 import { PRESETS } from './presets.js';
 import { INIT_TEMPLATE } from './template.js';
 import { runTests } from './testing.js';
@@ -115,7 +115,7 @@ function cmdInit(args: Args): void {
   console.log(`\nNext: ${c.bold('polyfence install')} to wire it into Claude Code, Codex, Gemini CLI and Antigravity.`);
 }
 
-const TRUST_HINT = 'its `allow` settings are ignored until you run `polyfence trust`';
+const TRUST_HINT = 'the built-in rules stay on and its `allow` settings are ignored until you run `polyfence trust`';
 
 function warnUntrusted(policy: Policy): void {
   for (const file of policy.untrusted ?? []) console.log(c.yellow(`\n${file} is not trusted: ${TRUST_HINT}.`));
@@ -255,7 +255,7 @@ function cmdTrust(args: Args): void {
   if (revoke) console.log(`${c.green('revoked')} ${file}`);
   else {
     console.log(`${c.green('trusted')} ${file}`);
-    console.log(c.dim('Its `allow` rules, `default: allow` and `onError: allow` now apply. Editing the file withdraws trust.'));
+    console.log(c.dim('The policy now applies as written, including `allow`, `disable` and replaced built-in rules. Editing the file withdraws trust.'));
   }
 }
 
@@ -293,7 +293,7 @@ function cmdDoctor(): void {
       console.log(`${failed ? c.red('✗') : c.green('✓')} policy tests: ${failed ? `${failed} failing` : `${own.tests.length} passing`}`);
     }
     for (const file of policy.untrusted ?? []) console.log(`${c.yellow('!')} ${file} is not trusted: ${TRUST_HINT}`);
-    if (own.source && loosens(own) && isTrusted(own.source)) console.log(`${c.green('✓')} trusted: its \`allow\` settings apply`);
+    if (own.source && !policy.untrusted?.length && isTrusted(own.source)) console.log(`${c.green('✓')} trusted: the project policy applies as written`);
   } catch (err) {
     console.log(`${c.red('✗')} policy: ${(err as Error).message}`);
   }

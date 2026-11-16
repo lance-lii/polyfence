@@ -26,6 +26,11 @@ export interface Segment {
    * this way: a program receives such an argument as one word, so it cannot be a flag.
    */
   matchText: string;
+  /**
+   * Commands the segment may be wrapping, in the same form as `matchText`: the words from each
+   * later argument on, as in `op run -- git push -f` or `docker exec app rm -rf /`.
+   */
+  tails: string[];
 }
 
 /** A tool call normalized from any agent's hook payload. */

@@ -87,6 +87,18 @@ test('claude: search globs, nested MCP arguments and PowerShell are checked', ()
   assert.equal(run('claude', { tool_name: 'PowerShell', tool_input: { command: 'git push -f' }, cwd: ROOT }).verdict.rule?.id, 'no-force-push');
 });
 
+test('claude: PowerShell paths use backslashes, and .exe names are commands', () => {
+  const ps = (command: string) => run('claude', { tool_name: 'PowerShell', tool_input: { command }, cwd: ROOT });
+  const read = ps('Get-Content .\\config\\.env');
+  assert.deepEqual(read.call.paths, ['./config/.env']);
+  assert.equal(read.verdict.rule?.id, 'protect-secrets');
+  assert.equal(ps('Set-Content -Path .\\.claude\\settings.json -Value x; git.exe push -f').verdict.rule?.id, 'no-force-push');
+  assert.equal(ps('C:\\Tools\\Git\\bin\\git.exe push --force').verdict.rule?.id, 'no-force-push');
+  assert.equal(ps('Get-ChildItem .\\src').verdict.outcome, 'defer');
+  // In sh the same backslashes are escapes.
+  assert.deepEqual(run('claude', { tool_name: 'Bash', tool_input: { command: 'cat .\\config\\.env' }, cwd: ROOT }).call.paths, ['.config.env']);
+});
+
 test('an allow reply does not say it needs approval', () => {
   const p = buildPolicy({ default: 'allow' }, { root: ROOT });
   const { reply } = run('claude', { tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: ROOT }, p);

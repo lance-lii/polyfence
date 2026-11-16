@@ -27,3 +27,7 @@ Hardening before the first release:
 - More wrappers are seen through: `time -p`, `caffeinate`, `setsid`, `flock`, `strace`, `busybox`, `arch`, `watch`, `ssh`, `su -c`, `npx -c`.
 - Claude Code: `Grep` globs, the `PowerShell` tool and paths nested inside MCP arguments are checked.
 - Audit entries carry the session id, subagent id and type, tool-use id and permission mode. Credentials in commands are redacted, and the log rotates at 5 MB.
+- With no user-level policy, an untrusted project policy can't leave out, disable or replace rules of the built-in `recommended` preset: the preset stays on underneath until `polyfence trust`.
+- `command` patterns are also tried against commands a segment wraps, so `op run -- git push -f`, `docker exec app rm -rf /` and `find -exec` are caught without listing every wrapper. Quoted text, the arguments of `echo`/`grep`/`man` and the subcommand of tools such as `git` are skipped.
+- Windows: path rules handle drive letters, backslashes, Git Bash paths and `~`; `git.exe` is `git`; the `PowerShell` tool is parsed with `\` as a path separator. CI runs Node 20 and, without gating, Windows.
+- Hook events that carry no tool call get a neutral reply instead of a verdict.

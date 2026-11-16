@@ -15,8 +15,6 @@ import path from 'node:path';
 
 /** macOS and Windows file systems ignore case by default: there `.ENV` is `.env` and `GIT` runs git. */
 export const CASE_INSENSITIVE = process.platform === 'darwin' || process.platform === 'win32';
-const fold = (s: string) => (CASE_INSENSITIVE ? s.toLowerCase() : s);
-const PATH_FLAGS = CASE_INSENSITIVE ? 'i' : '';
 
 const cache = new Map<string, RegExp>();
 
@@ -127,32 +125,61 @@ export function pathGlobSource(glob: string): string {
   return src;
 }
 
-export function expandHome(p: string): string {
-  if (p === '~' || p === '$HOME' || p === '${HOME}') return os.homedir();
-  if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
-  if (p.startsWith('$HOME/')) return path.join(os.homedir(), p.slice(6));
-  if (p.startsWith('${HOME}/')) return path.join(os.homedir(), p.slice(8));
-  return p;
+/** What path handling depends on: the separator rules, the home directory and whether names fold case. */
+export interface Platform {
+  path: path.PlatformPath;
+  home: string;
+  caseInsensitive: boolean;
 }
 
-const toPosix = (p: string) => p.split(path.sep).join('/');
+/** The machine polyfence runs on. */
+export const HOST: Platform = {
+  path,
+  get home() {
+    return os.homedir();
+  },
+  caseInsensitive: CASE_INSENSITIVE,
+};
+
+const isWindows = (pf: Platform) => pf.path.sep === '\\';
+const DRIVE = /^[a-zA-Z]:/;
+/** Paths are compared with forward slashes on every platform. */
+const toPosix = (p: string, pf: Platform) => (isWindows(pf) ? p.replace(/\\/g, '/') : p);
+
+export function expandHome(p: string, pf: Platform = HOST): string {
+  if (p === '~' || p === '$HOME' || p === '${HOME}') return pf.home;
+  if (p.startsWith('~/')) return pf.path.join(pf.home, p.slice(2));
+  if (p.startsWith('$HOME/')) return pf.path.join(pf.home, p.slice(6));
+  if (p.startsWith('${HOME}/')) return pf.path.join(pf.home, p.slice(8));
+  return p;
+}
 
 export interface PathContext {
   cwd: string;
   root: string;
+  /** Defaults to the host; tests pass another to check Windows or POSIX behaviour anywhere. */
+  platform?: Platform;
 }
 
 export function resolvePath(p: string, ctx: PathContext): string {
-  return toPosix(path.resolve(ctx.cwd, expandHome(p)));
+  const pf = ctx.platform ?? HOST;
+  let target = expandHome(p, pf);
+  // Git Bash, the usual shell for agents on Windows, writes C:\Users as /c/Users.
+  if (isWindows(pf)) target = target.replace(/^\/([a-zA-Z])\//, '$1:/');
+  return toPosix(pf.path.resolve(ctx.cwd, target), pf);
 }
 
-export function isInside(abs: string, root: string): boolean {
-  const rel = path.relative(fold(root), fold(abs));
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+export function isInside(abs: string, root: string, pf: Platform = HOST): boolean {
+  const lower = (s: string) => (pf.caseInsensitive ? s.toLowerCase() : s);
+  const rel = pf.path.relative(lower(root), lower(abs));
+  return rel === '' || (!rel.startsWith('..') && !pf.path.isAbsolute(rel));
 }
 
 /** Does one concrete path match one (non-negated) path glob? */
 export function pathMatches(p: string, pattern: string, ctx: PathContext): boolean {
+  const pf = ctx.platform ?? HOST;
+  const flags = pf.caseInsensitive ? 'i' : '';
+  const compiled = (kind: string, glob: string) => memo(kind + flags, glob, () => new RegExp('^' + pathGlobSource(glob) + '$', flags));
   const abs = resolvePath(p, ctx);
   const lit = regexLiteral(pattern, true);
   if (lit) return lit.test(abs);
@@ -160,17 +187,19 @@ export function pathMatches(p: string, pattern: string, ctx: PathContext): boole
   if (glob.endsWith('/')) glob += '**';
   if (!glob.includes('/')) {
     // Like .gitignore: a bare name matches at any depth.
-    const re = memo('base', glob, () => new RegExp('^' + pathGlobSource(glob) + '$', PATH_FLAGS));
-    return re.test(abs.slice(abs.lastIndexOf('/') + 1));
+    return compiled('base', glob).test(abs.slice(abs.lastIndexOf('/') + 1));
   }
-  const expanded = toPosix(expandHome(glob));
+  const expanded = toPosix(expandHome(glob, pf), pf);
   if (expanded.startsWith('/')) {
-    return memo('abs', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$', PATH_FLAGS)).test(abs);
+    // On Windows a pattern without a drive letter (`/etc/hosts`) applies on every drive.
+    return compiled('abs', expanded).test(isWindows(pf) ? abs.replace(DRIVE, '') : abs);
   }
-  const rootAbs = toPosix(path.resolve(ctx.root));
-  if (!isInside(abs, rootAbs)) return false;
-  const rel = toPosix(path.relative(fold(rootAbs), fold(abs)));
-  return memo('rel', expanded, () => new RegExp('^' + pathGlobSource(expanded) + '$', PATH_FLAGS)).test(rel);
+  if (isWindows(pf) && DRIVE.test(expanded)) return compiled('abs', expanded).test(abs);
+  const rootAbs = toPosix(pf.path.resolve(ctx.root), pf);
+  if (!isInside(abs, rootAbs, pf)) return false;
+  const lower = (s: string) => (pf.caseInsensitive ? s.toLowerCase() : s);
+  const rel = toPosix(pf.path.relative(lower(rootAbs), lower(abs)), pf);
+  return compiled('rel', expanded).test(rel);
 }
 
 /**
