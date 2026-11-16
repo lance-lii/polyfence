@@ -156,9 +156,12 @@ function geminiRulesFor(rule: Rule): GeminiRule[] | null {
   const m = rule.match;
   if (m.url || m.rawTool || m.outsideWorkspace !== undefined) return null;
   const cmd = arr(m.command);
-  const line = arr(m.commandLine);
+  // `script` patterns run against the raw command here: Gemini has no view with quoted text
+  // blanked, so its static layer can also fire on a command that only mentions the pattern.
+  const line = [...arr(m.commandLine), ...arr(m.script)];
+  if (cmd.length && line.length) return null; // both must match; one Gemini rule can't say that
   if (cmd.length || line.length) {
-    if (m.path || m.writePath) return null;
+    if (m.path || m.readPath || m.writePath) return null;
     if (cmd.some((p) => p.startsWith('!')) || line.some((p) => p.startsWith('!'))) return null;
     const out: GeminiRule[] = [];
     const prefixes = cmd.map(literalPrefix);
@@ -178,9 +181,12 @@ function geminiRulesFor(rule: Rule): GeminiRule[] | null {
     }
     return out;
   }
-  const paths = m.path ? arr(m.path) : m.writePath ? arr(m.writePath) : [];
+  const pathKeys = [m.path, m.readPath, m.writePath].filter((v) => v !== undefined);
+  if (pathKeys.length > 1) return null;
+  const paths = arr(pathKeys[0]);
   const kinds = arr(m.tool).filter((t) => t !== 'any') as ToolKind[];
-  const toolKinds: ToolKind[] = kinds.length ? kinds : m.writePath ? ['write', 'edit'] : ['read', 'write', 'edit'];
+  const byKey: ToolKind[] = m.writePath ? ['write', 'edit'] : m.readPath ? ['read', 'edit'] : ['read', 'write', 'edit'];
+  const toolKinds = !kinds.length ? byKey : pathKeys.length ? kinds.filter((k) => byKey.includes(k)) : kinds;
   const toolNames = toolKinds.flatMap((k) => GEMINI_TOOLS[k] ?? []);
   if (!toolNames.length) return null;
   if (!paths.length) return [{ toolName: toolNames }];

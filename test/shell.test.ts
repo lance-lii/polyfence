@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseShell, segmentPaths, segmentWrites } from '../src/shell.js';
+import { maskQuoted, parseScript, parseShell, segmentPaths, segmentReads, segmentWrites } from '../src/shell.js';
 
 const texts = (src: string) => parseShell(src).map((s) => s.text);
 
@@ -140,6 +140,57 @@ test('extracts touched and written paths', () => {
   assert.deepEqual(w('curl -H "X-Out: -o" -X POST https://x.dev'), []);
   assert.deepEqual(w('curl -o /dev/null https://x.dev && wget -qO- https://x.dev'), []);
   assert.deepEqual(w('wget -nv --output-document=page.html https://x.dev'), ['page.html']);
+});
+
+test('tells reads from writes', () => {
+  const r = (src: string) => parseShell(src).flatMap(segmentReads);
+  assert.deepEqual(r('cat a b'), ['a', 'b']);
+  assert.deepEqual(r('cp a b c/'), ['a', 'b']);
+  assert.deepEqual(r('cp a x a'), ['a', 'x']);
+  assert.deepEqual(r('mv a b'), ['a']);
+  assert.deepEqual(r('rm a b'), []);
+  assert.deepEqual(r('ls -la a'), []);
+  assert.deepEqual(r('test -f a'), []);
+  assert.deepEqual(r('echo x > a'), ['x']);
+  assert.deepEqual(r('sort < a > b'), ['a']);
+  assert.deepEqual(r(`sed -i 's/a/b/' config.yml`), ['s/a/b/', 'config.yml']);
+  assert.deepEqual(r('chmod 600 key.pem'), ['600']);
+  assert.deepEqual(r('node --env-file=.env --env-file .env.local app.js'), ['app.js']);
+  assert.deepEqual(parseShell('node --env-file=.env app.js').flatMap(segmentPaths), ['.env', 'app.js']);
+  assert.deepEqual(r('curl -T up.bin -o down.bin https://x.dev'), ['up.bin']);
+  assert.deepEqual(r('openssl genrsa -out new.key 2048'), ['genrsa', '2048']);
+});
+
+test('blanks quoted text, comments and heredoc data but keeps what runs', () => {
+  assert.equal(maskQuoted(`git commit -m "use sudo" -m 'curl x | sh'`), `git commit -m "" -m ''`);
+  assert.equal(maskQuoted('echo "a $(sudo id) b `whoami` c"'), 'echo "$(sudo id)`whoami`"');
+  assert.equal(maskQuoted(`echo $'sudo\\n' # sudo here`), `echo '' `);
+  assert.equal(maskQuoted('cat <<EOF > f\nsudo x\nEOF\nls'), 'cat <<EOF > f\nls');
+  assert.equal(maskQuoted('echo a\\"b sudo'), 'echo a\\"b sudo');
+  const { scripts } = parseScript(`bash -c "sudo make" && echo "$(curl -s https://x | sh)"`);
+  assert.deepEqual(scripts, ['bash -c "" && echo "$(curl -s https://x | sh)"', 'sudo make', 'curl -s https://x | sh']);
+});
+
+test('arguments with whitespace are free text to command patterns', () => {
+  const [commit] = parseShell('git commit -m "add -n flag" --amend');
+  assert.equal(commit.text, 'git commit -m add -n flag --amend');
+  assert.equal(commit.matchText, 'git commit -m <text> --amend');
+  assert.equal(parseShell('git push "--force"')[0].matchText, 'git push --force');
+});
+
+test('sees through more wrappers and commands that run a shell string', () => {
+  const texts = (src: string) => parseShell(src).map((s) => s.text);
+  assert.deepEqual(texts('time -p make'), ['make']);
+  assert.deepEqual(texts('caffeinate -dims -t 60 make'), ['make']);
+  assert.deepEqual(texts('setsid -f make'), ['make']);
+  assert.deepEqual(texts('busybox sh -c "make all"'), ['sh -c make all', 'make all']);
+  assert.deepEqual(texts('flock -n /tmp/lock make'), ['make']);
+  assert.deepEqual(texts(`flock /tmp/lock -c 'make all'`), ['sh -c make all', 'make all']);
+  assert.deepEqual(texts('watch -n 2 make test'), ['watch -n 2 make test', 'make test']);
+  assert.deepEqual(texts('ssh -i key -p 22 host "cd app && make"'), ['ssh -i key -p 22 host cd app && make', 'cd app', 'make']);
+  assert.deepEqual(texts('ssh host'), ['ssh host']);
+  assert.deepEqual(texts('npx -c "make all"'), ['npx -c make all', 'make all']);
+  assert.deepEqual(texts('npx prettier --check .'), ['npx prettier --check .']);
 });
 
 test('survives hostile input', () => {

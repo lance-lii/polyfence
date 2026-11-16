@@ -8,7 +8,7 @@ Write your rules once in `polyfence.yaml`. Polyfence enforces them in **Claude C
 
 [![CI](https://github.com/lance-lii/polyfence/actions/workflows/ci.yml/badge.svg)](https://github.com/lance-lii/polyfence/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/polyfence.svg)](https://www.npmjs.com/package/polyfence)
-![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
@@ -61,7 +61,7 @@ Either way, every shell command, file read, write, edit and fetch from those age
 ```yaml
 # polyfence.yaml
 version: 1
-extends: [recommended]     # 17 built-in rules (see below)
+extends: [recommended]     # 21 built-in rules (see below)
 
 rules:
   - id: protect-prod-config
@@ -87,14 +87,15 @@ The `reason` goes back to the agent, so it changes course instead of retrying th
 
 ## Why polyfence
 
-- **🧠 It reads shell like a shell does.** Commands are parsed, not prefix-matched: `&&`, `;`, pipes, `$(...)`, backticks, `bash -c`, `eval`, `sudo`, `env`, `VAR=1`, `timeout`, `xargs`, `git -C`, and heredoc bodies (so a commit message that *mentions* `rm -rf /` doesn't trip anything).
-- **🔑 It sees paths inside commands.** `cat .env`, `cp key.pem /tmp`, `echo x > ../other/file` and `sed -i ... polyfence.yaml` are checked against your path rules, not just the agents' file tools.
-- **🔒 Agents can't turn it off.** The default policy blocks agents from editing `polyfence.yaml`, `.claude/settings.json`, `.codex/*`, `.gemini/*` and `.agents/hooks.json`, through file tools *or* the shell.
+- **🧠 It reads shell like a shell does.** Commands are parsed, not prefix-matched: `&&`, `;`, pipes, `$(...)`, backticks, `bash -c`, `eval`, `sudo`, `env`, `VAR=1`, `timeout`, `xargs`, `git -C`, and heredoc bodies. Quoted text is not code: a commit message that *mentions* `rm -rf /`, `sudo` or `curl | sh` doesn't trip anything.
+- **🔑 It sees paths inside commands.** `cat .env`, `cp key.pem /tmp`, `echo x > ../other/file` and `sed -i ... polyfence.yaml` are checked against your path rules, not just the agents' file tools. It also tells reading from writing: `cat .env` is blocked, `ls .env` and `node --env-file=.env app.js` are not.
+- **🔒 Agents can't quietly turn it off.** The default policy blocks agents from editing `polyfence.yaml`, `.claude/settings.json`, `.codex/*`, `.gemini/*` and `.agents/hooks.json`, through file tools *or* the shell, and from running `polyfence install`, `uninstall`, `trust` or `init`. Starting another agent with its approvals or hooks switched off (`--dangerously-skip-permissions`, `--yolo`, `--bare`...) needs your approval.
+- **🧷 A repository can't loosen your rules.** Your user-level policy keeps applying under every project policy, and a project policy's `allow` settings do nothing until you run `polyfence trust` on that file.
 - **🧪 Policies have tests.** `polyfence test` runs the `tests:` in your policy. Put it in CI and guardrail changes get reviewed like code.
 - **🧱 Two layers.** The hook is the main enforcement point. `install` also compiles what it can into Codex `prefix_rule`s and Gemini policy-engine TOML, so a missing or broken hook still leaves the native layer in place.
 - **📜 Audit log.** Every decision lands in `.polyfence/audit.jsonl`. `polyfence log --deny` shows you what your agents tried.
 - **⚡ Fast and small.** ~30 ms per hook call. Zero runtime dependencies: it ships as one bundled file. No daemon, no network, no telemetry.
-- **🧯 Fails closed.** A broken policy file or an internal error denies tool calls with a clear message instead of silently letting everything through. If the hook can't run at all, only Claude Code can be told to block; see [Agent support](#agent-support).
+- **🧯 Fails closed.** A broken policy file, a hook payload it can't read or an internal error denies tool calls with a clear message instead of silently letting everything through. If the hook can't run at all, only Claude Code can be told to block; see [Agent support](#agent-support).
 
 ## What `recommended` covers
 
@@ -109,16 +110,20 @@ Run `polyfence presets` for the full list.
 | `no-hook-bypass` | deny | `git commit --no-verify` (also abbreviated, e.g. `--no-veri`), `-n` |
 | `no-husky-bypass` | deny | `HUSKY=0 git ...` |
 | `no-hooks-path-override` | deny | `git -c core.hooksPath=...`, `GIT_CONFIG_KEY_0=core.hooksPath` |
+| `ask-hooks-path-config` | ask | `git config core.hooksPath <dir>` (reading it and `--unset` are fine) |
 | `ask-destructive-git` | ask | `reset --hard`, `clean -f`, `checkout -- .`, `branch -D`, remote branch deletes |
 | `no-pipe-to-shell` | deny | `curl ... \| sh` (also `\| /bin/sh`, `\| sudo -E bash`), `bash <(curl ...)`, `sh -c "$(wget ...)"`, `source <(curl ...)`, `eval "$(curl ...)"` |
-| `protect-secrets` | deny | `.env*` (not `.env.example`), `*.pem`, `*.key`, SSH keys, cloud credentials |
+| `protect-secrets` | deny | reading `.env*` (not `.env.example`), `*.pem`, `*.key`, SSH keys, cloud credentials |
+| `ask-write-secrets` | ask | creating, overwriting or deleting those files: `cp .env.example .env`, `rm .env.local` |
 | `protect-guardrails` | deny | writes to polyfence and agent config files |
+| `no-guardrail-tampering` | deny | `polyfence install`, `uninstall`, `trust`, `init`, also through `npx` or `node` |
+| `ask-agent-bypass` | ask | `claude --dangerously-skip-permissions`, `--bare`, `--settings`; `codex --yolo`, `--ignore-rules`; `gemini --yolo`; `agy --dangerously-skip-permissions` |
 | `ask-outside-workspace` | ask | writes outside the project (temp dirs are fine) |
 | `ask-sudo` | ask | `sudo`, `doas` |
 | `ask-world-writable` | ask | `chmod 777`, `a+rwx` |
 | `ask-publish` | ask | `npm publish`, `cargo publish`, `twine upload`, `docker push`, `gh release create`... |
 | `ask-infra-changes` | ask | `terraform apply/destroy`, `kubectl apply/delete`, `pulumi up`, cloud `delete-*`... |
-| `ask-db-destroy` | ask | `DROP TABLE`, `TRUNCATE`, `prisma migrate reset`, `FLUSHALL`... |
+| `ask-db-destroy` | ask | `DROP TABLE`, `TRUNCATE`, `prisma migrate reset`, `FLUSHALL`... (not in `grep`, `git` or `echo` commands, which only search for or record the text) |
 
 `strict` adds approval for new dependencies, every `git push`, and every network fetch.
 
@@ -171,6 +176,7 @@ polyfence check [--explain] -- <shell command>   evaluate a command (exit 2 on d
 polyfence check --tool read|write|edit --path <file>
 polyfence check --tool fetch --url <url>
 polyfence test                                   run the tests in polyfence.yaml
+polyfence trust [--revoke]                       let this project's policy use `allow`
 polyfence compile codex|gemini [--out file]      print native static rules
 polyfence log [-n 20] [--deny] [--json]          show the audit log
 polyfence doctor                                 show what is wired up where
@@ -207,8 +213,10 @@ rules:
       agent: [claude, codex, gemini, antigravity]
       rawTool: "mcp__github__*"        # the agent's own tool name
       command: ["git push *", "/^npm\\s+publish/"]
-      commandLine: ["/curl.*\\|\\s*sh/"]
+      commandLine: ["/DROP\\s+TABLE/i"]
+      script: ["/curl.*\\|\\s*sh/"]
       path: [".env", "secrets/**", "!secrets/README.md"]
+      readPath: ["secrets/**"]
       writePath: ["config/production/**"]
       url: ["https://*.pastebin.com/*"]
       outsideWorkspace: true
@@ -229,9 +237,11 @@ tests:
 
 | Field | Matches against | Glob behaviour |
 |---|---|---|
-| `command` | each parsed command, wrappers removed (`git push -f origin`) | anchored. `*` matches anything. A trailing ` *` also matches nothing, so `git push *` matches `git push`. |
-| `commandLine` | the whole raw command string | unanchored search |
+| `command` | each parsed command, wrappers removed (`git push -f origin`). An argument that contains whitespace, such as a quoted commit message, appears as `<text>`, so a flag pattern can't match inside it. | anchored. `*` matches anything. A trailing ` *` also matches nothing, so `git push *` matches `git push`. |
+| `commandLine` | the whole raw command string, quoted text included. Use it for content, such as SQL. | unanchored search |
+| `script` | the shell code that runs: the command, every `bash -c` script and every `$(...)`, with quoted text, comments and heredoc data blanked. Use it for things `command` can't see, such as pipes, `sudo` and `VAR=1` prefixes. | unanchored search |
 | `path` | every path a call touches: file-tool paths plus path-like shell arguments and redirect targets | gitignore-style. A bare name (`.env`) matches at any depth, `dir/**` is rooted at the project, `~/` is your home, `**`, `*`, `?`, `{a,b}` |
+| `readPath` | only paths whose contents the call can read: read and edit tools, and shell arguments that aren't just written, listed or passed along (`cp a b` reads `a`; `rm x`, `ls x`, `> x` and `--env-file x` read nothing) | same as `path` |
 | `writePath` | only paths the call modifies: write/edit tools, redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`/`chmod`/`curl -o`/`wget -O`... | same as `path` |
 | `url` | `WebFetch`-style URLs, plus URLs in shell arguments | anchored, case-insensitive |
 
@@ -243,7 +253,26 @@ When a call matches more than one rule, the most restrictive one wins. To make a
 
 ### Where the policy comes from
 
-The hook looks for `polyfence.yaml` (or `.polyfence.yaml`, `polyfence.yml`, `.polyfence.yml`) from the session's working directory upward (for Antigravity, the first workspace folder). A directory named inside the tool call, such as Gemini's `dir_path` or Antigravity's `Cwd`, is never used to find the policy, because the agent chooses it. If there isn't one, it uses `~/.config/polyfence/polyfence.yaml`. If that doesn't exist either, it falls back to the built-in `recommended` preset.
+The hook looks for `polyfence.yaml` (or `.polyfence.yaml`, `polyfence.yml`, `.polyfence.yml`) from the directory the session started in, upward. Claude Code and Gemini CLI report that directory separately from the current one, so an agent that changes directory keeps its project's policy. For Codex it is the session's working directory, and for Antigravity the first workspace folder. A directory named inside the tool call, such as Gemini's `dir_path` or Antigravity's `Cwd`, is never used to find the policy, because the agent chooses it.
+
+Policies are layered, and a layer can only add restrictions to the others:
+
+1. `~/.config/polyfence/polyfence.yaml`, your user-level policy, if you have one.
+2. The project's policy. Without one, and without a user-level policy, the built-in `recommended` preset.
+3. The policy nearest to the current directory, if that is a different file: a package with its own policy, or a git worktree.
+
+Every matching rule from every layer counts and the most restrictive wins, so a project's `disable:` or a replaced rule id never switches off a rule from your user-level policy. Relative path patterns are rooted at the directory of the file they come from.
+
+### Trusting a project policy
+
+A project policy arrives with the repository, so anyone who can change the repository can change it. It can always tighten. What loosens (`allow` rules, `default: allow` and `onError: allow`) is ignored until you trust the file:
+
+```bash
+polyfence trust            # trust the current content of this project's policy
+polyfence trust --revoke
+```
+
+Trust is recorded in `~/.config/polyfence/trusted.json` against the file's content, so any edit withdraws it. `polyfence doctor` and `polyfence check` tell you when a policy is waiting for it. Your user-level policy is always trusted. `polyfence test` checks the project file exactly as written, without your user-level layer, so it gives the same result in CI.
 
 ## Guardrails in CI
 
@@ -269,7 +298,8 @@ jobs:
 - Commands built at run time: variables (`x=git; $x push -f`), brace expansion (`{git,push} --force`), git aliases (`git -c alias.p='push -f' p`), and globs the shell expands into protected files (`cat .env*`).
 - Code run by another interpreter: `python -c`, `node -e`, or a script the agent writes and then runs.
 - Shell input that isn't a download or a heredoc the shell reads, such as `echo 'git push -f' | bash` or `cat <<EOF | sh`.
-- `cd` inside one command (`cd ~/.aws && cat credentials`), and wrapper options polyfence doesn't parse: `find -exec`, `env -S`, `sudo -iu user` (still asked about as `sudo`).
+- `cd` inside one command (`cd ~/.aws && cat credentials`), wrapper options polyfence doesn't parse (`find -exec`, `env -S`, `sudo -iu user`, which is still asked about as `sudo`), and wrappers it doesn't know (`docker exec`, `parallel`, `chrt`, `taskset`). The ones it does know include `sudo`, `env`, `timeout`, `nice`, `xargs`, `time`, `nohup`, `setsid`, `caffeinate`, `flock`, `strace`, `watch`, `ssh`, `su -c` and `npx -c`.
+- Reads that don't name the file: a search over a directory that contains `.env` (`grep -r KEY .`, or a search tool pointed at `.`), and a program that prints what it was given (`node --env-file=.env -p process.env`).
 - Writes it doesn't model: `curl -O` and plain `wget URL` (named after the URL), `curl --output-dir`, `git checkout <ref> -- <file>`, unpacked archives, and persistent settings such as `git config core.hooksPath`.
 
 **Does it phone home?** No. It reads your policy, makes a decision locally and appends one line to a local log.

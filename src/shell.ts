@@ -13,7 +13,7 @@ import type { Segment } from './types.js';
 const MAX_DEPTH = 6;
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'fish']);
 const ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/;
-const PREFIX_KEYWORDS = new Set(['then', 'else', 'elif', 'do', 'if', 'while', 'until', '!', '{', 'time']);
+const PREFIX_KEYWORDS = new Set(['then', 'else', 'elif', 'do', 'if', 'while', 'until', '!', '{']);
 const DROP_SEGMENT = new Set(['for', 'case', 'select', 'function', 'fi', 'done', 'esac', '}', ';;']);
 
 interface RawSeg {
@@ -37,21 +37,31 @@ interface Heredoc {
 }
 
 export function parseShell(src: string): Segment[] {
-  const out: Segment[] = [];
-  collect(src, 0, out);
-  return out;
+  return parseScript(src).segments;
 }
 
-function collect(src: string, depth: number, out: Segment[]): void {
+/**
+ * Every command a shell string would run, plus the shell code itself at each nesting level
+ * (the string, each `bash -c` script, each `$(...)`) with quoted text blanked: see `maskQuoted`.
+ */
+export function parseScript(src: string): { segments: Segment[]; scripts: string[] } {
+  const segments: Segment[] = [];
+  const scripts: string[] = [];
+  collect(src, 0, segments, scripts);
+  return { segments, scripts };
+}
+
+function collect(src: string, depth: number, out: Segment[], scripts: string[]): void {
   if (depth > MAX_DEPTH || !src.trim()) return;
+  scripts.push(maskQuoted(src));
   const nested: string[] = [];
   for (const raw of tokenize(src, nested)) {
     const seg = normalize(raw);
     if (!seg) continue;
     out.push(seg);
-    for (const inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out);
+    for (const inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out, scripts);
   }
-  for (const n of nested) collect(n, depth + 1, out);
+  for (const n of nested) collect(n, depth + 1, out, scripts);
 }
 
 function tokenize(src: string, nested: string[]): RawSeg[] {
@@ -314,6 +324,85 @@ function readParen(src: string, open: number): [string, number] {
   return [src.slice(open + 1), n];
 }
 
+/**
+ * Shell code with the text of quoted strings, comments and heredoc bodies removed, so a pattern
+ * for `sudo` or `curl | sh` matches code that runs and not a commit message that mentions it.
+ * `$(...)` and backticks inside double quotes stay: they run.
+ */
+export function maskQuoted(src: string): string {
+  const n = src.length;
+  const docs: Heredoc[] = [];
+  let out = '';
+  let wordStart = true;
+  let i = 0;
+  const substitution = (): void => {
+    if (src[i] === '`') {
+      const [inner, next] = readBacktick(src, i);
+      out += '`' + maskQuoted(inner) + '`';
+      i = next;
+    } else {
+      const [inner, next] = readParen(src, i + 1);
+      out += '$(' + maskQuoted(inner) + ')';
+      i = next;
+    }
+  };
+  while (i < n) {
+    const c = src[i];
+    const isSubstitution = c === '`' || (c === '$' && src[i + 1] === '(');
+    if (c === '\\') {
+      out += src.slice(i, i + 2);
+      i += 2;
+    } else if (c === "'") {
+      const end = src.indexOf("'", i + 1);
+      out += "''";
+      i = end === -1 ? n : end + 1;
+    } else if (c === '$' && src[i + 1] === "'") {
+      let end = i + 2;
+      while (end < n && src[end] !== "'") end += src[end] === '\\' ? 2 : 1;
+      out += "''";
+      i = end + 1;
+    } else if (c === '"') {
+      out += '"';
+      i++;
+      while (i < n && src[i] !== '"') {
+        if (src[i] === '\\') i += 2;
+        else if (src[i] === '`' || (src[i] === '$' && src[i + 1] === '(')) substitution();
+        else i++;
+      }
+      out += '"';
+      i++;
+    } else if (isSubstitution) {
+      substitution();
+    } else if (c === '#' && wordStart) {
+      while (i < n && src[i] !== '\n') i++;
+      continue;
+    } else if (c === '<' && src[i + 1] === '<' && src[i + 2] !== '<') {
+      let j = i + 2;
+      const strip = src[j] === '-';
+      if (strip) j++;
+      while (src[j] === ' ' || src[j] === '\t') j++;
+      const m = /^(['"]?)([A-Za-z0-9_.-]+)\1/.exec(src.slice(j));
+      if (m) docs.push({ delim: m[2], strip });
+      const end = m ? j + m[0].length : i + 2;
+      out += src.slice(i, end);
+      i = end;
+    } else if (c === '\n' && docs.length) {
+      out += c;
+      i = skipHeredocs(src, i + 1, docs);
+      docs.length = 0;
+      wordStart = true;
+      continue;
+    } else {
+      out += c;
+      i++;
+      wordStart = /[\s;&|(]/.test(c);
+      continue;
+    }
+    wordStart = false;
+  }
+  return out;
+}
+
 function readBacktick(src: string, open: number): [string, number] {
   let i = open + 1;
   while (i < src.length && src[i] !== '`') i += src[i] === '\\' ? 2 : 1;
@@ -394,7 +483,16 @@ const ENV_VALUE_FLAGS = new Set(['-u', '-C', '-S', '--unset', '--chdir', '--spli
 const NICE_VALUE_FLAGS = new Set(['-n', '--adjustment']);
 const TIMEOUT_VALUE_FLAGS = new Set(['-s', '-k', '--signal', '--kill-after']);
 const XARGS_VALUE_FLAGS = new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-a', '--max-args', '--max-procs']);
+const TIME_VALUE_FLAGS = new Set(['-o', '-f', '--output', '--format']);
+const CAFFEINATE_VALUE_FLAGS = new Set(['-t', '-w']);
+const TRACE_VALUE_FLAGS = new Set(['-o', '-e', '-p', '-s', '-u', '-E', '-P', '-a', '-I', '-S', '-U', '-X']);
+const FLOCK_VALUE_FLAGS = new Set(['-w', '--timeout', '-E', '--conflict-exit-code']);
+const ARCH_VALUE_FLAGS = new Set(['-e', '-d']);
+const NO_VALUE_FLAGS = new Set<string>();
 const GIT_VALUE_FLAGS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env']);
+
+/** Wrappers that run the rest of their arguments as a command and take no option values. */
+const PLAIN_WRAPPERS = new Set(['command', 'builtin', 'exec', 'nohup', 'stdbuf', 'unbuffer', 'setsid', 'chronic']);
 
 export function stripWrappers(argv: string[]): string[] {
   let a = [...argv];
@@ -406,8 +504,17 @@ export function stripWrappers(argv: string[]): string[] {
     const w = commandName(a[0]);
     if (w === 'sudo' || w === 'doas') a = skipFlags(a.slice(1), SUDO_VALUE_FLAGS);
     else if (w === 'env') a = skipFlags(a.slice(1), ENV_VALUE_FLAGS);
-    else if (w === 'command' || w === 'builtin' || w === 'exec' || w === 'nohup' || w === 'stdbuf' || w === 'unbuffer')
-      a = skipFlags(a.slice(1), new Set());
+    else if (PLAIN_WRAPPERS.has(w)) a = skipFlags(a.slice(1), NO_VALUE_FLAGS);
+    else if (w === 'time') a = skipFlags(a.slice(1), TIME_VALUE_FLAGS);
+    else if (w === 'caffeinate') a = skipFlags(a.slice(1), CAFFEINATE_VALUE_FLAGS);
+    else if (w === 'strace' || w === 'ltrace') a = skipFlags(a.slice(1), TRACE_VALUE_FLAGS);
+    else if (w === 'arch' && a.length > 1) a = skipFlags(a.slice(1), ARCH_VALUE_FLAGS);
+    else if (w === 'busybox' && a.length > 1) a = a.slice(1);
+    else if (w === 'flock') {
+      // `flock [options] <lockfile> <command...>` or `flock <lockfile> -c '<script>'`.
+      a = skipFlags(a.slice(1), FLOCK_VALUE_FLAGS).slice(1);
+      if (a[0] === '-c' || a[0] === '--command') a = ['sh', '-c', ...a.slice(1)];
+    }
     else if (w === 'nice' || w === 'ionice') a = skipFlags(a.slice(1), NICE_VALUE_FLAGS);
     else if (w === 'timeout' || w === 'gtimeout') {
       a = skipFlags(a.slice(1), TIMEOUT_VALUE_FLAGS);
@@ -430,6 +537,9 @@ function stripGitGlobals(args: string[]): string[] {
   return args.slice(i);
 }
 
+/** Stands in for an argument that contains whitespace when `command` patterns are matched. */
+export const FREE_TEXT = '<text>';
+
 function normalize(raw: RawSeg): Segment | undefined {
   if (raw.words.length && DROP_SEGMENT.has(raw.words[0])) return undefined;
   const argv = stripWrappers(raw.words);
@@ -440,10 +550,15 @@ function normalize(raw: RawSeg): Segment | undefined {
     redirects: raw.redirects,
     inputRedirects: raw.inputRedirects,
     text: argv.join(' '),
+    matchText: argv.map((w) => (/\s/.test(w) ? FREE_TEXT : w)).join(' '),
   };
 }
 
 const SHELL_VALUE_FLAGS = new Set(['--rcfile', '--init-file']);
+const WATCH_VALUE_FLAGS = new Set(['-n', '--interval', '-q', '--equexit']);
+const SSH_VALUE_FLAGS = new Set('-b -c -D -E -e -F -I -i -J -L -l -m -O -o -p -Q -R -S -W -w'.split(' '));
+/** Commands that run the string after `-c` in a shell. */
+const DASH_C_RUNNERS = new Set(['su', 'runuser', 'npx', 'script']);
 
 /**
  * Scripts run by `bash -c "..."`, `sh -lc '...'`, `eval ...` or a shell reading a heredoc.
@@ -453,6 +568,13 @@ const SHELL_VALUE_FLAGS = new Set(['--rcfile', '--init-file']);
 function innerScript(argv: string[], stdin: string[]): string[] {
   if (!argv.length) return [];
   if (argv[0] === 'eval') return [argv.slice(1).join(' ')];
+  // `watch` and `ssh` hand their arguments to a shell, joined by spaces.
+  if (argv[0] === 'watch') return [skipFlags(argv.slice(1), WATCH_VALUE_FLAGS).join(' ')];
+  if (argv[0] === 'ssh') return [skipFlags(argv.slice(1), SSH_VALUE_FLAGS).slice(1).join(' ')];
+  if (DASH_C_RUNNERS.has(argv[0]) || (argv[0] === 'npm' && argv[1] === 'exec')) {
+    const at = argv.findIndex((a) => a === '-c' || a === '--command' || a === '--call');
+    return at !== -1 && argv[at + 1] ? [argv[at + 1]] : [];
+  }
   if (!SHELLS.has(argv[0])) return [];
   let command = false;
   let fromStdin = false;
@@ -478,21 +600,61 @@ function innerScript(argv: string[], stdin: string[]): string[] {
 const DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/;
 const URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 
-/** Path-like arguments and redirect targets of a segment. */
-export function segmentPaths(seg: Segment): string[] {
+/** Options whose value is a file handed to the program as configuration, not shown to the agent. */
+const PASS_THROUGH_FLAGS = new Set(['--env-file', '--env_file']);
+
+function argPaths(args: string[], forReads = false): string[] {
   const out: string[] = [];
-  for (const arg of seg.argv.slice(1)) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     let value = arg;
     if (arg.startsWith('-')) {
       const eq = arg.indexOf('=');
+      if (forReads && PASS_THROUGH_FLAGS.has(eq === -1 ? arg : arg.slice(0, eq))) {
+        if (eq === -1) i++;
+        continue;
+      }
       if (eq === -1) continue;
       value = arg.slice(eq + 1);
     }
     if (value && !URL_RE.test(value) && !DEVICE.test(value)) out.push(value);
   }
+  return out;
+}
+
+/** Path-like arguments and redirect targets of a segment. */
+export function segmentPaths(seg: Segment): string[] {
+  const out = argPaths(seg.argv.slice(1));
   for (const r of seg.redirects) if (!DEVICE.test(r)) out.push(r);
   for (const r of seg.inputRedirects) if (!DEVICE.test(r)) out.push(r);
   return out;
+}
+
+/** Commands that look at a file's name or metadata, never its contents. */
+const METADATA_ONLY = new Set(['ls', 'stat', 'test', '[', '[[', 'du', 'realpath', 'readlink', 'basename', 'dirname']);
+
+/**
+ * Paths whose contents a segment can read: its path arguments and input redirects, minus the
+ * ones it only writes (`cp a b` reads a, `rm x` and `> x` read nothing). `mv` reads what it
+ * moves, and in-place editors read what they edit. The value of `--env-file` is left out: the
+ * program gets the file, the agent doesn't see it.
+ */
+export function segmentReads(seg: Segment): string[] {
+  const inputs = seg.inputRedirects.filter((r) => !DEVICE.test(r));
+  const [cmd, ...rest] = seg.argv;
+  if (METADATA_ONLY.has(cmd)) return inputs;
+  const args = argPaths(rest, true);
+  const drop = (value: string) => {
+    const at = args.lastIndexOf(value);
+    if (at !== -1) args.splice(at, 1);
+  };
+  if (cmd === 'mv') {
+    const operands = rest.filter((a) => !a.startsWith('-'));
+    if (operands.length) drop(operands[operands.length - 1]);
+  } else if (cmd !== 'sed' && cmd !== 'perl') {
+    for (const w of argWrites(seg)) drop(w);
+  }
+  return [...args, ...inputs];
 }
 
 export function segmentUrls(seg: Segment): string[] {
@@ -505,9 +667,14 @@ const MUTATORS_SKIP_FIRST = new Set(['chmod', 'chown', 'chgrp']);
 
 /** Paths a segment modifies: output-redirect targets plus arguments of well-known mutating commands. */
 export function segmentWrites(seg: Segment): string[] {
-  const out = seg.redirects.filter((r) => !DEVICE.test(r));
+  return [...seg.redirects.filter((r) => !DEVICE.test(r)), ...argWrites(seg)];
+}
+
+function argWrites(seg: Segment): string[] {
+  const out: string[] = [];
   const [cmd, ...rest] = seg.argv;
   const operands = rest.filter((a) => !a.startsWith('-'));
+  const valueOf = (flag: string) => rest.filter((_, i) => rest[i - 1] === flag);
   if (MUTATORS_ALL.has(cmd)) out.push(...operands);
   else if (MUTATORS_LAST.has(cmd) && operands.length) out.push(operands[operands.length - 1]);
   else if (MUTATORS_SKIP_FIRST.has(cmd)) out.push(...operands.slice(1));
@@ -517,6 +684,10 @@ export function segmentWrites(seg: Segment): string[] {
     out.push(...operands.slice(1));
   } else if (cmd === 'curl' || cmd === 'wget') {
     out.push(...downloadOutputs(cmd, rest));
+  } else if (cmd === 'openssl') {
+    out.push(...valueOf('-out'));
+  } else if (cmd === 'ssh-keygen') {
+    out.push(...valueOf('-f'));
   }
   return out.filter((p) => !URL_RE.test(p));
 }
