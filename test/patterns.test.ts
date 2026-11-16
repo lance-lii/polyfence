@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
-import { CASE_INSENSITIVE, commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, urlRegex } from '../src/patterns.js';
+import { CASE_INSENSITIVE, commandLineRegex, commandRegex, isInside, matchList, pathMatches, resolvePath, type Platform, urlRegex } from '../src/patterns.js';
 
 test('command globs are anchored and whitespace-tolerant', () => {
   const re = commandRegex('git push *');
@@ -47,7 +47,8 @@ test('home globs expand ~', () => {
   assert.ok(pathMatches('$HOME/.ssh/config', '~/.ssh/**', ctx));
   assert.ok(pathMatches('${HOME}/.ssh/config', '~/.ssh/**', ctx));
   assert.ok(!pathMatches(`${home}/.sshx/a`, '~/.ssh/**', ctx));
-  for (const p of ['~', '$HOME', '${HOME}']) assert.equal(resolvePath(p, ctx), path.resolve(home), p);
+  // Resolved paths use forward slashes on every platform.
+  for (const p of ['~', '$HOME', '${HOME}']) assert.equal(resolvePath(p, ctx), path.resolve(home).split(path.sep).join('/'), p);
 });
 
 test('path case follows the platform', () => {
@@ -68,4 +69,42 @@ test('negated patterns carve exceptions per value', () => {
 test('url globs', () => {
   assert.ok(urlRegex('https://*.pastebin.com/*').test('https://x.pastebin.com/raw/1'));
   assert.ok(!urlRegex('https://github.com/*').test('https://gitlab.com/x'));
+});
+
+test('Windows paths: drive letters, backslashes, Git Bash paths and the home directory', () => {
+  const platform: Platform = { path: path.win32, home: 'C:\\Users\\me', caseInsensitive: true };
+  const ctx = { cwd: 'C:\\work\\app', root: 'C:\\work\\app', platform };
+  const m = (p: string, pattern: string) => pathMatches(p, pattern, ctx);
+  assert.equal(resolvePath('src\\a.ts', ctx), 'C:/work/app/src/a.ts');
+  assert.equal(resolvePath('/c/Users/me/x', ctx), 'c:/Users/me/x');
+
+  assert.ok(m('.env', '.env'));
+  assert.ok(m('config\\.ENV', '.env'));
+  assert.ok(m('C:\\work\\app\\config\\production\\db.yml', 'config/production/**'));
+  assert.ok(m('config/production/db.yml', 'config/production/**'));
+  assert.ok(!m('C:\\work\\other\\config\\production\\db.yml', 'config/production/**'));
+  assert.ok(!m('D:\\work\\app\\config\\production\\db.yml', 'config/production/**'));
+
+  assert.ok(m('C:\\Users\\me\\.ssh\\id_ed25519', '~/.ssh/**'));
+  assert.ok(m('~/.ssh/config', '~/.ssh/**'));
+  assert.ok(m('/c/Users/me/.aws/credentials', '~/.aws/credentials'));
+  assert.ok(!m('C:\\Users\\you\\.ssh\\id_ed25519', '~/.ssh/**'));
+
+  assert.ok(m('C:\\etc\\hosts', '/etc/hosts'), 'a pattern without a drive applies on every drive');
+  assert.ok(m('D:\\data\\x', 'D:/data/**'));
+  assert.ok(!m('C:\\data\\x', 'D:/data/**'));
+
+  assert.ok(isInside('C:/work/app/src/a.ts', 'C:\\Work\\App', platform));
+  assert.ok(!isInside('C:/work/application/a.ts', 'C:\\work\\app', platform));
+  assert.ok(!isInside('D:/work/app/a.ts', 'C:\\work\\app', platform));
+});
+
+test('POSIX paths behave the same on any host', () => {
+  const platform: Platform = { path: path.posix, home: '/home/me', caseInsensitive: false };
+  const ctx = { cwd: '/work/app', root: '/work/app', platform };
+  assert.ok(pathMatches('.env', '.env', ctx));
+  assert.ok(!pathMatches('.ENV', '.env', ctx));
+  assert.ok(pathMatches('/home/me/.ssh/id_rsa', '~/.ssh/**', ctx));
+  assert.ok(pathMatches('/c/Users/me/x', '/c/Users/**', ctx), '/c/ is an ordinary directory here');
+  assert.ok(!pathMatches('/work/other/src/a.ts', 'src/**', ctx));
 });

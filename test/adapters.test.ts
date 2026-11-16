@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ADAPTERS, detectAgent, patchPaths } from '../src/adapters.js';
+import { ADAPTERS, detectAgent, globCandidates, patchPaths } from '../src/adapters.js';
 import { evaluate } from '../src/engine.js';
 import { builtinPolicy, buildPolicy } from '../src/policy.js';
 
@@ -73,6 +73,36 @@ test('allow: native in Claude and Gemini, left to Codex, which rejects a bare al
   const gemini = run('gemini', { tool_name: 'run_shell_command', tool_input: { command: 'npm test' }, cwd: ROOT }, p);
   assert.equal(JSON.parse(gemini.reply.stdout!).decision, 'allow');
   for (const r of [claude, codex, gemini]) assert.equal(r.reply.exitCode, 0, 'the JSON decides, not the exit code');
+});
+
+test('claude: search globs, nested MCP arguments and PowerShell are checked', () => {
+  const grep = (tool_input: Record<string, unknown>) => run('claude', { tool_name: 'Grep', tool_input, cwd: ROOT }).verdict;
+  assert.equal(grep({ pattern: 'SECRET', path: '.', glob: '.env*' }).rule?.id, 'protect-secrets');
+  assert.equal(grep({ pattern: 'BEGIN', glob: '**/*.{pem,key}' }).rule?.id, 'protect-secrets');
+  assert.equal(grep({ pattern: 'TODO', path: 'src', glob: '*.ts' }).outcome, 'defer');
+  assert.deepEqual(globCandidates('*.{pem,key}'), ['*.pem', '.pem', '*.key', '.key']);
+
+  const mcp = run('claude', { tool_name: 'mcp__fs__read', tool_input: { args: { options: { path: '.env' } } }, cwd: ROOT });
+  assert.equal(mcp.verdict.rule?.id, 'protect-secrets');
+  assert.equal(run('claude', { tool_name: 'PowerShell', tool_input: { command: 'git push -f' }, cwd: ROOT }).verdict.rule?.id, 'no-force-push');
+});
+
+test('claude: PowerShell paths use backslashes, and .exe names are commands', () => {
+  const ps = (command: string) => run('claude', { tool_name: 'PowerShell', tool_input: { command }, cwd: ROOT });
+  const read = ps('Get-Content .\\config\\.env');
+  assert.deepEqual(read.call.paths, ['./config/.env']);
+  assert.equal(read.verdict.rule?.id, 'protect-secrets');
+  assert.equal(ps('Set-Content -Path .\\.claude\\settings.json -Value x; git.exe push -f').verdict.rule?.id, 'no-force-push');
+  assert.equal(ps('C:\\Tools\\Git\\bin\\git.exe push --force').verdict.rule?.id, 'no-force-push');
+  assert.equal(ps('Get-ChildItem .\\src').verdict.outcome, 'defer');
+  // In sh the same backslashes are escapes.
+  assert.deepEqual(run('claude', { tool_name: 'Bash', tool_input: { command: 'cat .\\config\\.env' }, cwd: ROOT }).call.paths, ['.config.env']);
+});
+
+test('an allow reply does not say it needs approval', () => {
+  const p = buildPolicy({ default: 'allow' }, { root: ROOT });
+  const { reply } = run('claude', { tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: ROOT }, p);
+  assert.equal(JSON.parse(reply.stdout!).hookSpecificOutput.permissionDecisionReason, 'polyfence: allowed by policy');
 });
 
 test('patchPaths', () => {

@@ -7,6 +7,7 @@
  *   Gemini CLI    BeforeTool  stdin {tool_name, tool_input, cwd}       stdout {decision, reason}
  *   Antigravity   PreToolUse  stdin {toolCall: {name, args}, workspacePaths}  stdout {decision, reason}
  */
+import path from 'node:path';
 import { fetchCall, fileCall, otherCall, shellCall } from './engine.js';
 import type { AgentName, Policy, ToolCall, ToolKind, Verdict } from './types.js';
 
@@ -28,6 +29,11 @@ export interface Adapter {
    * tool call's own arguments: the model chooses those, and could point them at a policy it wrote.
    */
   workspace(input: Json): string;
+  /**
+   * The directory the session started in, when the agent reports one that the model can't move.
+   * The session directory can follow `cd`; the policy found here keeps applying when it does.
+   */
+  project?(input: Json): string | undefined;
   reply(verdict: Verdict, policy: Policy, call?: ToolCall): HookReply;
 }
 
@@ -37,20 +43,41 @@ const sessionCwd = (input: Json): string => str(input.cwd) ?? process.cwd();
 
 const PATH_KEYS = /^(file_?path|filePath|path|paths|filename|target_?file|TargetFile|absolute_?path|AbsolutePath|notebook_path|dir_?path|DirectoryPath|directory|SearchPath|FilePath|source|destination)$/i;
 
-/** Pull path-ish string values out of an arbitrary tool input. */
-function guessPaths(input: Json): string[] {
-  const out: string[] = [];
+/** Pull path-ish string values out of an arbitrary tool input, including nested arguments. */
+function guessPaths(input: unknown, depth = 0, out: string[] = []): string[] {
+  if (depth > 4 || typeof input !== 'object' || input === null) return out;
   for (const [k, v] of Object.entries(input)) {
-    if (!PATH_KEYS.test(k)) continue;
-    if (typeof v === 'string' && v) out.push(v);
-    else if (Array.isArray(v)) for (const x of v) if (typeof x === 'string' && x) out.push(x);
+    if (PATH_KEYS.test(k)) {
+      if (typeof v === 'string' && v) out.push(v);
+      else if (Array.isArray(v)) for (const x of v) if (typeof x === 'string' && x) out.push(x);
+    }
+    if (typeof v === 'object' && v !== null) {
+      for (const x of Array.isArray(v) ? v : [v]) guessPaths(x, depth + 1, out);
+    }
   }
   return out;
 }
 
+/** An absolute directory from the agent's environment, e.g. `CLAUDE_PROJECT_DIR`. */
+const envDir = (name: string): string | undefined => {
+  const dir = process.env[name];
+  return dir && path.isAbsolute(dir) ? dir : undefined;
+};
+
+/**
+ * File names a search glob could select, for path rules: `.env*` is tried as `.env`, and
+ * `*.{pem,key}` as `*.pem` and `*.key`. A heuristic: a glob can't be compared with a glob exactly.
+ */
+export function globCandidates(glob: string): string[] {
+  const brace = /\{([^{}]*)\}/.exec(glob);
+  if (brace) return brace[1].split(',').flatMap((alt) => globCandidates(glob.slice(0, brace.index) + alt + glob.slice(brace.index + brace[0].length)));
+  const bare = glob.replace(/[*?]/g, '');
+  return bare && bare !== glob ? [glob, bare] : [glob];
+}
+
 function message(verdict: Verdict): string {
   const id = verdict.rule ? `[${verdict.rule.id}]` : '';
-  const reason = verdict.reason ?? (verdict.outcome === 'deny' ? 'blocked by policy' : 'needs approval');
+  const reason = verdict.reason ?? { deny: 'blocked by policy', ask: 'needs approval', allow: 'allowed by policy', defer: '' }[verdict.outcome];
   return `polyfence${id}: ${reason}`;
 }
 
@@ -75,6 +102,8 @@ function claudeLikeCall(agent: AgentName, input: Json): ToolCall {
     case 'Bash':
     case 'BashOutput':
       return shellCall(str(ti.command) ?? '', base);
+    case 'PowerShell':
+      return shellCall(str(ti.command) ?? '', base, { powershell: true });
     case 'Read':
     case 'NotebookRead':
       return fileCall('read', [str(ti.file_path) ?? str(ti.notebook_path) ?? ''], base);
@@ -87,8 +116,11 @@ function claudeLikeCall(agent: AgentName, input: Json): ToolCall {
       return fileCall('edit', [str(ti.notebook_path) ?? ''], base);
     case 'Glob':
     case 'Grep':
-    case 'LS':
-      return fileCall('read', [str(ti.path) ?? '', str(ti.pattern) && tool === 'Glob' ? (ti.pattern as string) : ''], base);
+    case 'LS': {
+      // Grep reads the files its `glob` selects; Glob only lists the names its `pattern` selects.
+      const glob = tool === 'Grep' ? str(ti.glob) : tool === 'Glob' ? str(ti.pattern) : undefined;
+      return fileCall('read', [str(ti.path) ?? '', ...(glob ? (tool === 'Grep' ? globCandidates(glob) : [glob]) : [])], base);
+    }
     case 'WebFetch':
       return fetchCall([str(ti.url) ?? ''], base);
     case 'WebSearch':
@@ -117,6 +149,7 @@ const claude: Adapter = {
   nativeAsk: true,
   toCall: (input) => claudeLikeCall('claude', input),
   workspace: sessionCwd,
+  project: () => envDir('CLAUDE_PROJECT_DIR'),
   reply: (verdict) => claudeReply(verdict),
 };
 
@@ -213,7 +246,7 @@ function geminiCall(input: Json): ToolCall {
   if (kind === 'shell') {
     const call = shellCall(str(ti.command) ?? '', base);
     const dir = str(ti.directory) ?? str(ti.dir_path);
-    return dir ? { ...call, cwd: dir.startsWith('/') ? dir : `${base.cwd}/${dir}` } : call;
+    return dir ? { ...call, cwd: path.resolve(base.cwd, dir) } : call;
   }
   if (kind === 'fetch') {
     const urls = [str(ti.url), ...(str(ti.prompt)?.match(/https?:\/\/\S+/g) ?? [])].filter(Boolean) as string[];
@@ -229,6 +262,7 @@ const gemini: Adapter = {
   nativeAsk: false,
   toCall: geminiCall,
   workspace: sessionCwd,
+  project: () => envDir('GEMINI_PROJECT_DIR'),
   reply: (verdict, policy) => {
     const v = degradeAsk(verdict, policy);
     if (v.outcome === 'deny') return { exitCode: 0, stdout: JSON.stringify({ decision: 'deny', reason: message(v) }) };
