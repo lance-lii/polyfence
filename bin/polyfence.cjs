@@ -844,10 +844,10 @@ var require_foldFlowLines = __commonJS({
       onFold && onFold();
       let res = text.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
-        let fold2 = folds[i2], end2 = folds[i2 + 1] || text.length;
-        fold2 === 0 ? res = `
-${indent}${text.slice(0, end2)}` : (mode === FOLD_QUOTED && escapedFolds[fold2] && (res += `${text[fold2]}\\`), res += `
-${indent}${text.slice(fold2 + 1, end2)}`);
+        let fold = folds[i2], end2 = folds[i2 + 1] || text.length;
+        fold === 0 ? res = `
+${indent}${text.slice(0, end2)}` : (mode === FOLD_QUOTED && escapedFolds[fold] && (res += `${text[fold]}\\`), res += `
+${indent}${text.slice(fold + 1, end2)}`);
       }
       return res;
     }
@@ -3477,8 +3477,8 @@ var require_resolve_flow_scalar = __commonJS({
 `))
           if (ch === `
 `) {
-            let { fold: fold2, offset } = foldNewline(source, i);
-            res += fold2, i = offset;
+            let { fold, offset } = foldNewline(source, i);
+            res += fold, i = offset;
           } else if (ch === "\\") {
             let next = source[++i], cc = escapeCodes[next];
             if (cc)
@@ -3511,14 +3511,14 @@ var require_resolve_flow_scalar = __commonJS({
       return (source[source.length - 1] !== '"' || source.length === 1) && onError(source.length, "MISSING_CHAR", 'Missing closing "quote'), res;
     }
     function foldNewline(source, offset) {
-      let fold2 = "", ch = source[offset + 1];
+      let fold = "", ch = source[offset + 1];
       for (; (ch === " " || ch === "	" || ch === `
 ` || ch === "\r") && !(ch === "\r" && source[offset + 2] !== `
 `); )
         ch === `
-` && (fold2 += `
+` && (fold += `
 `), offset += 1, ch = source[offset + 1];
-      return fold2 || (fold2 = " "), { fold: fold2, offset };
+      return fold || (fold = " "), { fold, offset };
     }
     var escapeCodes = {
       0: "\0",
@@ -5495,7 +5495,7 @@ var import_node_fs2 = __toESM(require("node:fs"), 1), import_node_path4 = __toES
 var import_node_os2 = __toESM(require("node:os"), 1), import_node_path2 = __toESM(require("node:path"), 1);
 
 // src/patterns.ts
-var import_node_os = __toESM(require("node:os"), 1), import_node_path = __toESM(require("node:path"), 1), CASE_INSENSITIVE = process.platform === "darwin" || process.platform === "win32", fold = (s) => CASE_INSENSITIVE ? s.toLowerCase() : s, PATH_FLAGS = CASE_INSENSITIVE ? "i" : "", cache = /* @__PURE__ */ new Map();
+var import_node_os = __toESM(require("node:os"), 1), import_node_path = __toESM(require("node:path"), 1), CASE_INSENSITIVE = process.platform === "darwin" || process.platform === "win32", cache = /* @__PURE__ */ new Map();
 function escapeRe(s) {
   return s.replace(/[.+^${}()|[\]\\]/g, "\\$&");
 }
@@ -5563,30 +5563,38 @@ function pathGlobSource(glob) {
   }
   return src;
 }
-function expandHome(p) {
-  return p === "~" || p === "$HOME" || p === "${HOME}" ? import_node_os.default.homedir() : p.startsWith("~/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(2)) : p.startsWith("$HOME/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(6)) : p.startsWith("${HOME}/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(8)) : p;
+var HOST = {
+  path: import_node_path.default,
+  get home() {
+    return import_node_os.default.homedir();
+  },
+  caseInsensitive: CASE_INSENSITIVE
+}, isWindows = (pf) => pf.path.sep === "\\", DRIVE = /^[a-zA-Z]:/, toPosix = (p, pf) => isWindows(pf) ? p.replace(/\\/g, "/") : p;
+function expandHome(p, pf = HOST) {
+  return p === "~" || p === "$HOME" || p === "${HOME}" ? pf.home : p.startsWith("~/") ? pf.path.join(pf.home, p.slice(2)) : p.startsWith("$HOME/") ? pf.path.join(pf.home, p.slice(6)) : p.startsWith("${HOME}/") ? pf.path.join(pf.home, p.slice(8)) : p;
 }
-var toPosix = (p) => p.split(import_node_path.default.sep).join("/");
 function resolvePath(p, ctx) {
-  return toPosix(import_node_path.default.resolve(ctx.cwd, expandHome(p)));
+  let pf = ctx.platform ?? HOST, target = expandHome(p, pf);
+  return isWindows(pf) && (target = target.replace(/^\/([a-zA-Z])\//, "$1:/")), toPosix(pf.path.resolve(ctx.cwd, target), pf);
 }
-function isInside(abs, root) {
-  let rel = import_node_path.default.relative(fold(root), fold(abs));
-  return rel === "" || !rel.startsWith("..") && !import_node_path.default.isAbsolute(rel);
+function isInside(abs, root, pf = HOST) {
+  let lower = (s) => pf.caseInsensitive ? s.toLowerCase() : s, rel = pf.path.relative(lower(root), lower(abs));
+  return rel === "" || !rel.startsWith("..") && !pf.path.isAbsolute(rel);
 }
 function pathMatches(p, pattern, ctx) {
-  let abs = resolvePath(p, ctx), lit = regexLiteral(pattern, !0);
+  let pf = ctx.platform ?? HOST, flags = pf.caseInsensitive ? "i" : "", compiled = (kind, glob2) => memo(kind + flags, glob2, () => new RegExp("^" + pathGlobSource(glob2) + "$", flags)), abs = resolvePath(p, ctx), lit = regexLiteral(pattern, !0);
   if (lit) return lit.test(abs);
   let glob = pattern.startsWith("./") ? pattern.slice(2) : pattern;
   if (glob.endsWith("/") && (glob += "**"), !glob.includes("/"))
-    return memo("base", glob, () => new RegExp("^" + pathGlobSource(glob) + "$", PATH_FLAGS)).test(abs.slice(abs.lastIndexOf("/") + 1));
-  let expanded = toPosix(expandHome(glob));
+    return compiled("base", glob).test(abs.slice(abs.lastIndexOf("/") + 1));
+  let expanded = toPosix(expandHome(glob, pf), pf);
   if (expanded.startsWith("/"))
-    return memo("abs", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$", PATH_FLAGS)).test(abs);
-  let rootAbs = toPosix(import_node_path.default.resolve(ctx.root));
-  if (!isInside(abs, rootAbs)) return !1;
-  let rel = toPosix(import_node_path.default.relative(fold(rootAbs), fold(abs)));
-  return memo("rel", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$", PATH_FLAGS)).test(rel);
+    return compiled("abs", expanded).test(isWindows(pf) ? abs.replace(DRIVE, "") : abs);
+  if (isWindows(pf) && DRIVE.test(expanded)) return compiled("abs", expanded).test(abs);
+  let rootAbs = toPosix(pf.path.resolve(ctx.root), pf);
+  if (!isInside(abs, rootAbs, pf)) return !1;
+  let lower = (s) => pf.caseInsensitive ? s.toLowerCase() : s, rel = toPosix(pf.path.relative(lower(rootAbs), lower(abs)), pf);
+  return compiled("rel", expanded).test(rel);
 }
 function matchList(values, patterns, test) {
   let positive = patterns.filter((p) => !p.startsWith("!")), negative = patterns.filter((p) => p.startsWith("!")).map((p) => p.slice(1));
@@ -5595,10 +5603,17 @@ function matchList(values, patterns, test) {
 
 // src/shell.ts
 var MAX_DEPTH = 6, SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh", "fish"]), ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/, PREFIX_KEYWORDS = /* @__PURE__ */ new Set(["then", "else", "elif", "do", "if", "while", "until", "!", "{"]), DROP_SEGMENT = /* @__PURE__ */ new Set(["for", "case", "select", "function", "fi", "done", "esac", "}", ";;"]);
-function parseScript(src) {
+function parseScript(src, opts = {}) {
   let segments = [], scripts = [];
-  return collect(src, 0, segments, scripts), { segments, scripts };
+  literalBackslash = opts.powershell === !0;
+  try {
+    collect(src, 0, segments, scripts);
+  } finally {
+    literalBackslash = !1;
+  }
+  return { segments, scripts };
 }
+var literalBackslash = !1, isEscape = (ch) => ch === "\\" && !literalBackslash;
 function collect(src, depth, out, scripts) {
   if (depth > MAX_DEPTH || !src.trim()) return;
   scripts.push(maskQuoted(src));
@@ -5608,6 +5623,7 @@ function collect(src, depth, out, scripts) {
     if (seg) {
       out.push(seg);
       for (let inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out, scripts);
+      for (let tail of tailArgvs(seg.argv)) for (let inner of innerScript(tail, [])) collect(inner, depth + 1, out, scripts);
     }
   }
   for (let n of nested) collect(n, depth + 1, out, scripts);
@@ -5623,7 +5639,7 @@ function tokenize(src, nested) {
   };
   for (; i < n; ) {
     let c2 = src[i];
-    if (c2 === "\\") {
+    if (isEscape(c2)) {
       if (src[i + 1] === `
 `) {
         i += 2;
@@ -5649,7 +5665,7 @@ function tokenize(src, nested) {
     }
     if (c2 === '"') {
       for (inWord = !0, quoted = !0, i++; i < n && src[i] !== '"'; )
-        if (src[i] === "\\" && i + 1 < n && '"\\$`\n'.includes(src[i + 1]))
+        if (isEscape(src[i]) && i + 1 < n && '"\\$`\n'.includes(src[i + 1]))
           src[i + 1] !== `
 ` && (word += src[i + 1]), i += 2;
         else if (src[i] === "$" && src[i + 1] === "(") {
@@ -5739,7 +5755,7 @@ function readParen(src, open) {
   let n = src.length, docs = [], depth = 0, i = open;
   for (; i < n; ) {
     let c2 = src[i];
-    if (c2 === "\\") {
+    if (isEscape(c2)) {
       i += 2;
       continue;
     }
@@ -5749,7 +5765,7 @@ function readParen(src, open) {
       continue;
     }
     if (c2 === '"') {
-      for (i++; i < n && src[i] !== '"'; ) i += src[i] === "\\" ? 2 : 1;
+      for (i++; i < n && src[i] !== '"'; ) i += isEscape(src[i]) ? 2 : 1;
       i++;
       continue;
     }
@@ -5786,7 +5802,7 @@ function maskQuoted(src) {
   };
   for (; i < n; ) {
     let c2 = src[i], isSubstitution = c2 === "`" || c2 === "$" && src[i + 1] === "(";
-    if (c2 === "\\")
+    if (isEscape(c2))
       out += src.slice(i, i + 2), i += 2;
     else if (c2 === "'") {
       let end = src.indexOf("'", i + 1);
@@ -5797,7 +5813,7 @@ function maskQuoted(src) {
       out += "''", i = end + 1;
     } else if (c2 === '"') {
       for (out += '"', i++; i < n && src[i] !== '"'; )
-        src[i] === "\\" ? i += 2 : src[i] === "`" || src[i] === "$" && src[i + 1] === "(" ? substitution() : i++;
+        isEscape(src[i]) ? i += 2 : src[i] === "`" || src[i] === "$" && src[i + 1] === "(" ? substitution() : i++;
       out += '"', i++;
     } else if (isSubstitution)
       substitution();
@@ -5867,8 +5883,8 @@ function ansiC(body) {
   });
 }
 function basename(word) {
-  let idx = word.lastIndexOf("/");
-  return idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+  let idx = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")), name = idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+  return name.replace(/\.(?:exe|cmd|bat)$/i, "") || name;
 }
 function commandName(word) {
   return CASE_INSENSITIVE ? basename(word).toLowerCase() : basename(word);
@@ -5916,7 +5932,19 @@ function stripGitGlobals(args) {
   }
   return args.slice(i);
 }
-var FREE_TEXT = "<text>";
+var FREE_TEXT = "<text>", masked = (argv) => argv.map((w) => /\s/.test(w) ? FREE_TEXT : w).join(" "), INERT = /* @__PURE__ */ new Set(["polyfence", "echo", "printf", "man", "which", "type", "whatis", "apropos", "whereis", "grep", "egrep", "fgrep", "rg", "ag"]), SUBCOMMAND_TOOLS = new Set(
+  "git hg svn docker podman kubectl helm npm pnpm yarn bun brew cargo go pip pip3 gem apt apt-get dnf yum gh glab aws gcloud az gsutil terraform tofu".split(" ")
+), MAX_TAILS = 16;
+function tailArgvs(argv) {
+  if (argv.length < 2 || INERT.has(argv[0])) return [];
+  let out = [];
+  for (let i = SUBCOMMAND_TOOLS.has(argv[0]) ? 2 : 1; i < argv.length && out.length < MAX_TAILS && !INERT.has(commandName(argv[i])); i++) {
+    if (argv[i].startsWith("-") || /\s/.test(argv[i]) || !/^[\w./~]/.test(argv[i])) continue;
+    let tail = stripWrappers(argv.slice(i));
+    tail.length && out.push(tail);
+  }
+  return out;
+}
 function normalize(raw) {
   if (raw.words.length && DROP_SEGMENT.has(raw.words[0])) return;
   let argv = stripWrappers(raw.words);
@@ -5927,7 +5955,8 @@ function normalize(raw) {
       redirects: raw.redirects,
       inputRedirects: raw.inputRedirects,
       text: argv.join(" "),
-      matchText: argv.map((w) => /\s/.test(w) ? FREE_TEXT : w).join(" ")
+      matchText: masked(argv),
+      tails: tailArgvs(argv).map(masked)
     };
 }
 var SHELL_VALUE_FLAGS = /* @__PURE__ */ new Set(["--rcfile", "--init-file"]), WATCH_VALUE_FLAGS = /* @__PURE__ */ new Set(["-n", "--interval", "-q", "--equexit"]), SSH_VALUE_FLAGS = new Set("-b -c -D -E -e -F -I -i -J -L -l -m -O -o -p -Q -R -S -W -w".split(" ")), DASH_C_RUNNERS = /* @__PURE__ */ new Set(["su", "runuser", "npx", "script"]);
@@ -6041,8 +6070,10 @@ function ruleMatches(rule, call, ctx) {
   let tools = m.tool ? arr(m.tool) : inferTools(m);
   if (!tools.includes("any") && !tools.includes(call.tool) || m.rawTool && !matchList([call.rawTool], arr(m.rawTool), (v, p) => urlRegex(p).test(v))) return !1;
   if (m.command) {
-    let texts = call.segments.map((s) => s.matchText);
-    if (!matchList(texts, arr(m.command), (v, p) => commandRegex(p).test(v))) return !1;
+    let patterns = arr(m.command), positive = patterns.filter((p) => !p.startsWith("!")), negative = patterns.filter((p) => p.startsWith("!")).map((p) => p.slice(1)), excluded = (text) => negative.some((p) => commandRegex(p).test(text));
+    if (!call.segments.some(
+      (s) => !excluded(s.matchText) && [s.matchText, ...s.tails].some((text) => positive.some((p) => commandRegex(p).test(text)) && !excluded(text))
+    )) return !1;
   }
   if (m.commandLine) {
     let lines = call.command && CASE_INSENSITIVE ? [call.command, call.command.toLowerCase()] : [call.command ?? ""];
@@ -6054,10 +6085,10 @@ function ruleMatches(rule, call, ctx) {
   }
   if (m.readPath && !matchList(call.reads, arr(m.readPath), (v, p) => pathMatches(v, p, ctx)) || m.path && !matchList(call.paths, arr(m.path), (v, p) => pathMatches(v, p, ctx)) || m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx)) || m.url && !matchList(call.urls, arr(m.url), (v, p) => urlRegex(p).test(v))) return !1;
   if (m.outsideWorkspace !== void 0) {
-    let root = import_node_path2.default.resolve(ctx.root);
+    let pf = ctx.platform ?? HOST, root = pf.path.resolve(ctx.root);
     if (call.writes.some((p) => {
       let abs = resolvePath(p, ctx);
-      return !isInside(abs, root) && !TEMP_ROOTS.some((t) => isInside(abs, t));
+      return !isInside(abs, root, pf) && !TEMP_ROOTS.some((t) => isInside(abs, t, pf));
     }) !== m.outsideWorkspace) return !1;
   }
   return !0;
@@ -6067,17 +6098,20 @@ function evaluate(policy, call) {
   for (let r of matched) (!winner || RANK[r.decision] > RANK[winner.decision]) && (winner = r);
   return winner ? { outcome: winner.decision, rule: winner, reason: winner.reason, matched } : { outcome: policy.default, matched };
 }
-function shellCall(command, base2) {
-  let { segments, scripts } = parseScript(command);
+function shellCall(command, base2, opts = {}) {
+  let { segments, scripts } = parseScript(command, opts), paths = (of) => {
+    let found = segments.flatMap(of);
+    return opts.powershell ? found.map((p) => p.replace(/\\/g, "/")) : found;
+  };
   return {
     ...base2,
     tool: "shell",
     command,
     segments,
     scripts,
-    paths: segments.flatMap(segmentPaths),
-    reads: segments.flatMap(segmentReads),
-    writes: segments.flatMap(segmentWrites),
+    paths: paths(segmentPaths),
+    reads: paths(segmentReads),
+    writes: paths(segmentWrites),
     urls: segments.flatMap(segmentUrls)
   };
 }
@@ -6482,6 +6516,10 @@ function setTrust(file, revoke = !1) {
 function loosens(policy) {
   return policy.default === "allow" || policy.onError === "allow" || policy.rules.some((r) => r.decision === "allow");
 }
+function dropsBuiltins(policy) {
+  let mine = new Map(policy.rules.map((r) => [r.id, r]));
+  return PRESETS.recommended.some((r) => mine.get(r.id)?.preset === void 0);
+}
 function tightenOnly(policy) {
   return {
     ...policy,
@@ -6879,9 +6917,9 @@ function claudeLikeCall(agent, input) {
   switch (tool) {
     case "Bash":
     case "BashOutput":
-    // PowerShell isn't sh, but commands, flags, `;`, `|` and `&&` are close enough to check.
-    case "PowerShell":
       return shellCall(str(ti.command) ?? "", base2);
+    case "PowerShell":
+      return shellCall(str(ti.command) ?? "", base2, { powershell: !0 });
     case "Read":
     case "NotebookRead":
       return fileCall("read", [str(ti.file_path) ?? str(ti.notebook_path) ?? ""], base2);
@@ -6988,7 +7026,7 @@ function geminiCall(input) {
   let tool = str(input.tool_name) ?? str(input.original_request_name) ?? "unknown", ti = obj(input.tool_input), base2 = { agent: "gemini", rawTool: tool, cwd: str(input.cwd) ?? process.cwd() }, kind = GEMINI_TOOLS2[tool];
   if (kind === "shell") {
     let call = shellCall(str(ti.command) ?? "", base2), dir = str(ti.directory) ?? str(ti.dir_path);
-    return dir ? { ...call, cwd: dir.startsWith("/") ? dir : `${base2.cwd}/${dir}` } : call;
+    return dir ? { ...call, cwd: import_node_path5.default.resolve(base2.cwd, dir) } : call;
   }
   if (kind === "fetch") {
     let urls = [str(ti.url), ...str(ti.prompt)?.match(/https?:\/\/\S+/g) ?? []].filter(Boolean);
@@ -7046,15 +7084,15 @@ function ownPolicy(cwd) {
   return import_node_path6.default.dirname(import_node_path6.default.resolve(file)) === userConfigDir() && (policy.root = cwd), policy;
 }
 function policyFor(cwd, projectDir = cwd) {
-  let project = (file) => {
+  let userFile = userPolicyFile(), projectFile = findProjectPolicyFile(projectDir), nearFile = findProjectPolicyFile(cwd), isNear = nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile)), load = (file, standsAlone) => {
     let policy = loadPolicy(file);
-    return loosens(policy) && !isTrusted(file) ? tightenOnly(policy) : policy;
-  }, userFile = userPolicyFile(), projectFile = findProjectPolicyFile(projectDir), nearFile = findProjectPolicyFile(cwd), layers = [];
-  userFile && layers.push({ ...loadPolicy(userFile), root: projectDir }), projectFile && layers.push(project(projectFile)), layers.length || layers.push(builtinPolicy(projectDir)), nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile)) && layers.push(project(nearFile));
-  let primary = projectFile ? layers.findIndex((l) => l.source === import_node_path6.default.resolve(projectFile)) : 0;
-  return layerPolicies([...layers.filter((_, i) => i !== primary), layers[primary]]);
+    return (loosens(policy) || standsAlone && dropsBuiltins(policy)) && !isTrusted(file) ? tightenOnly(policy) : policy;
+  }, project = projectFile ? load(projectFile, !userFile) : void 0, near = isNear ? load(nearFile, !1) : void 0, base2;
+  userFile ? base2 = { ...loadPolicy(userFile), root: project?.root ?? projectDir } : (!project || project.untrusted?.length) && (base2 = builtinPolicy(project?.root ?? projectDir));
+  let primary = project ?? base2;
+  return layerPolicies([base2, near, project].filter((l) => l !== void 0 && l !== primary).concat(primary));
 }
-var str2 = (v) => typeof v == "string" && v.length ? v : void 0;
+var TOOL_EVENTS = /* @__PURE__ */ new Set(["PreToolUse", "BeforeTool"]), str2 = (v) => typeof v == "string" && v.length ? v : void 0;
 function auditContext(input) {
   return {
     session: str2(input.session_id) ?? str2(input.conversationId),
@@ -7073,6 +7111,8 @@ function runHook(stdin, agentArg) {
     return agentArg ? ADAPTERS[agentArg].reply({ outcome: "deny", reason, matched: [] }, builtinPolicy(process.cwd())) : { exitCode: 2, stderr: `polyfence: ${reason}
 ` };
   }
+  let event = str2(input.hook_event_name);
+  if (event && !TOOL_EVENTS.has(event)) return { exitCode: 0 };
   let adapter = ADAPTERS[agentArg ?? detectAgent(input)], workspace = adapter.workspace(input), policy;
   try {
     policy = policyFor(workspace, adapter.project?.(input) ?? workspace);
@@ -7327,7 +7367,7 @@ function cmdInit(args) {
 `), console.log(`${c.green("updated")} .gitignore ${c.dim("(audit log)")}`)), console.log(`
 Next: ${c.bold("polyfence install")} to wire it into Claude Code, Codex, Gemini CLI and Antigravity.`);
 }
-var TRUST_HINT = "its `allow` settings are ignored until you run `polyfence trust`";
+var TRUST_HINT = "the built-in rules stay on and its `allow` settings are ignored until you run `polyfence trust`";
 function warnUntrusted(policy) {
   for (let file of policy.untrusted ?? []) console.log(c.yellow(`
 ${file} is not trusted: ${TRUST_HINT}.`));
@@ -7425,7 +7465,7 @@ function cmdTrust(args) {
   } catch (err) {
     fail(err.message);
   }
-  revoke ? console.log(`${c.green("revoked")} ${file}`) : (console.log(`${c.green("trusted")} ${file}`), console.log(c.dim("Its `allow` rules, `default: allow` and `onError: allow` now apply. Editing the file withdraws trust.")));
+  revoke ? console.log(`${c.green("revoked")} ${file}`) : (console.log(`${c.green("trusted")} ${file}`), console.log(c.dim("The policy now applies as written, including `allow`, `disable` and replaced built-in rules. Editing the file withdraws trust.")));
 }
 function cmdLog(args) {
   let policy = loadOrFail(process.cwd(), flag(args, "policy")), file = auditFile(policy), entries = readAudit(file), outcome = flag(args, "outcome") ?? (args.flags.deny ? "deny" : void 0);
@@ -7454,7 +7494,7 @@ function cmdDoctor() {
       console.log(`${failed ? c.red("\u2717") : c.green("\u2713")} policy tests: ${failed ? `${failed} failing` : `${own.tests.length} passing`}`);
     }
     for (let file of policy.untrusted ?? []) console.log(`${c.yellow("!")} ${file} is not trusted: ${TRUST_HINT}`);
-    own.source && loosens(own) && isTrusted(own.source) && console.log(`${c.green("\u2713")} trusted: its \`allow\` settings apply`);
+    own.source && !policy.untrusted?.length && isTrusted(own.source) && console.log(`${c.green("\u2713")} trusted: the project policy applies as written`);
   } catch (err) {
     console.log(`${c.red("\u2717")} policy: ${err.message}`);
   }
