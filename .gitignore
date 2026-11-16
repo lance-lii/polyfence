@@ -3,3 +3,4 @@ dist/
 .polyfence/
 *.log
 .DS_Store
+.vexp/

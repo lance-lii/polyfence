@@ -5,9 +5,9 @@ import { execFileSync } from 'node:child_process';
 import { auditFile, readAudit } from './audit.js';
 import { compileCodex, compileGemini } from './compile.js';
 import { describeCall, evaluate, fetchCall, fileCall, shellCall } from './engine.js';
-import { policyFor, runHook } from './hook.js';
+import { ownPolicy, policyFor, runHook } from './hook.js';
 import { install, isInstalled, uninstall, type Change, type Scope } from './install.js';
-import { PolicyError, loadPolicy } from './policy.js';
+import { PolicyError, findProjectPolicyFile, isTrusted, loadPolicy, loosens, setTrust } from './policy.js';
 import { PRESETS } from './presets.js';
 import { INIT_TEMPLATE } from './template.js';
 import { runTests } from './testing.js';
@@ -82,9 +82,13 @@ function parseAgents(list: string[]): AgentName[] {
   return list as AgentName[];
 }
 
-function loadOrFail(cwd: string, explicit?: string): Policy {
+/**
+ * The policy the hook would enforce in `cwd`; with `own`, the nearest policy file exactly as
+ * written (no user-level layer, `allow` kept), which is what `polyfence test` checks.
+ */
+function loadOrFail(cwd: string, explicit?: string, own = false): Policy {
   try {
-    return explicit ? loadPolicy(explicit) : policyFor(cwd);
+    return explicit ? loadPolicy(explicit) : own ? ownPolicy(cwd) : policyFor(cwd);
   } catch (err) {
     if (err instanceof PolicyError) fail(err.message);
     throw err;
@@ -109,6 +113,12 @@ function cmdInit(args: Args): void {
     console.log(`${c.green('updated')} .gitignore ${c.dim('(audit log)')}`);
   }
   console.log(`\nNext: ${c.bold('polyfence install')} to wire it into Claude Code, Codex, Gemini CLI and Antigravity.`);
+}
+
+const TRUST_HINT = 'its `allow` settings are ignored until you run `polyfence trust`';
+
+function warnUntrusted(policy: Policy): void {
+  for (const file of policy.untrusted ?? []) console.log(c.yellow(`\n${file} is not trusted: ${TRUST_HINT}.`));
 }
 
 function printChanges(changes: Change[], dryRun: boolean): void {
@@ -156,6 +166,7 @@ function cmdInstall(args: Args, remove: boolean): void {
       console.log(c.yellow('\n`polyfence` is not on your PATH, so agents cannot run the hook yet.'));
       console.log(c.yellow('Install it globally (npm i -g polyfence) or pass --command "npx --no polyfence hook".'));
     }
+    warnUntrusted(policy);
     if (agents.includes('antigravity')) console.log(c.dim('\nAntigravity support is experimental; its hook format is still settling.'));
   }
 }
@@ -194,12 +205,13 @@ function cmdCheck(args: Args): void {
       if (call.writes.length) console.log(c.dim(`  writes: ${call.writes.join(', ')}`));
     }
     console.log(c.dim(`\n  policy: ${policy.source ?? 'built-in recommended preset'}`));
+    if (!flag(args, 'policy')) warnUntrusted(policy);
   }
   process.exitCode = verdict.outcome === 'deny' ? 2 : 0;
 }
 
 function cmdTest(args: Args): void {
-  const policy = loadOrFail(process.cwd(), flag(args, 'policy'));
+  const policy = loadOrFail(process.cwd(), flag(args, 'policy'), true);
   if (!policy.tests.length) {
     console.log(c.yellow('No tests in policy. Add a `tests:` list, e.g.\n  tests:\n    - shell: git push --force\n      expect: deny'));
     return;
@@ -230,8 +242,25 @@ function cmdCompile(args: Args): void {
   } else process.stdout.write(text);
 }
 
+function cmdTrust(args: Args): void {
+  const file = flag(args, 'policy') ?? findProjectPolicyFile(process.cwd());
+  if (!file) fail('no project policy found here. A user-level policy is always trusted.');
+  const revoke = Boolean(args.flags.revoke);
+  try {
+    if (!revoke) loadPolicy(file);
+    setTrust(file, revoke);
+  } catch (err) {
+    fail((err as Error).message);
+  }
+  if (revoke) console.log(`${c.green('revoked')} ${file}`);
+  else {
+    console.log(`${c.green('trusted')} ${file}`);
+    console.log(c.dim('Its `allow` rules, `default: allow` and `onError: allow` now apply. Editing the file withdraws trust.'));
+  }
+}
+
 function cmdLog(args: Args): void {
-  const policy = loadOrFail(process.cwd());
+  const policy = loadOrFail(process.cwd(), flag(args, 'policy'));
   const file = auditFile(policy);
   let entries = readAudit(file);
   const outcome = flag(args, 'outcome') ?? (args.flags.deny ? 'deny' : undefined);
@@ -258,10 +287,13 @@ function cmdDoctor(): void {
   try {
     policy = policyFor(cwd);
     console.log(`${c.green('✓')} policy: ${policy.source ?? 'none found, using built-in recommended preset'} ${c.dim(`(${policy.rules.length} rules)`)}`);
-    if (policy.tests.length) {
-      const failed = runTests(policy).filter((r) => !r.ok).length;
-      console.log(`${failed ? c.red('✗') : c.green('✓')} policy tests: ${failed ? `${failed} failing` : `${policy.tests.length} passing`}`);
+    const own = ownPolicy(cwd);
+    if (own.tests.length) {
+      const failed = runTests(own).filter((r) => !r.ok).length;
+      console.log(`${failed ? c.red('✗') : c.green('✓')} policy tests: ${failed ? `${failed} failing` : `${own.tests.length} passing`}`);
     }
+    for (const file of policy.untrusted ?? []) console.log(`${c.yellow('!')} ${file} is not trusted: ${TRUST_HINT}`);
+    if (own.source && loosens(own) && isTrusted(own.source)) console.log(`${c.green('✓')} trusted: its \`allow\` settings apply`);
   } catch (err) {
     console.log(`${c.red('✗')} policy: ${(err as Error).message}`);
   }
@@ -301,8 +333,9 @@ async function readStdin(): Promise<string> {
 async function cmdHook(args: Args): Promise<void> {
   const agent = args.positional[1] as AgentName | undefined;
   if (agent && !AGENTS.includes(agent)) {
-    process.stderr.write(`polyfence: unknown agent "${agent}"\n`);
-    process.exit(0);
+    // Exit code 2 blocks the call: a hook that can't tell which agent it serves checks nothing.
+    process.stderr.write(`polyfence: unknown agent "${agent}", failing closed\n`);
+    process.exit(2);
   }
   const reply = runHook(await readStdin(), agent);
   if (reply.stdout) process.stdout.write(reply.stdout + '\n');
@@ -320,6 +353,7 @@ ${c.bold('Usage')}
   polyfence check --tool read|write|edit --path <file>
   polyfence check --tool fetch --url <url>
   polyfence test                                   run the tests in polyfence.yaml
+  polyfence trust [--revoke]                       let this project's policy use \`allow\`
   polyfence compile codex|gemini [--out file]      print native static rules
   polyfence log [-n 20] [--deny] [--json]          show the audit log
   polyfence doctor                                 show what is wired up where
@@ -345,6 +379,8 @@ export async function main(argv: string[]): Promise<void> {
       return cmdCheck(args);
     case 'test':
       return cmdTest(args);
+    case 'trust':
+      return cmdTrust(args);
     case 'compile':
       return cmdCompile(args);
     case 'log':

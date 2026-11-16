@@ -52,6 +52,9 @@ const GUARDRAIL_FILES = [
   '.agents/hooks.json',
 ];
 
+/** Commands that search, print or record text without running it. */
+const INERT_COMMANDS = ['grep', 'egrep', 'fgrep', 'rg', 'ag', 'git', 'echo', 'printf', 'cat', 'less', 'more', 'head', 'tail', 'ls', 'find', 'wc', 'diff'];
+
 const recommended: PresetRule[] = [
   {
     id: 'no-rm-rf-root',
@@ -96,7 +99,7 @@ const recommended: PresetRule[] = [
     id: 'no-husky-bypass',
     decision: 'deny',
     reason: 'Disabling hooks with HUSKY=0 or SKIP= hides failing checks.',
-    match: { commandLine: ['/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/'] },
+    match: { script: ['/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/'] },
   },
   {
     id: 'no-hooks-path-override',
@@ -104,8 +107,15 @@ const recommended: PresetRule[] = [
     reason: 'Pointing core.hooksPath elsewhere skips the repository hooks. Fix the failing check instead.',
     // git config keys ignore case; `command` patterns never see `git -c`, so match the raw line.
     match: {
-      commandLine: ['/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)core\\.hookspath\\s*=/i', '/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=[\'"]*core\\.hookspath\\b/i'],
+      commandLine: ['/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)[\'"]?core\\.hookspath\\s*=/i', '/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=[\'"]*core\\.hookspath\\b/i'],
     },
+  },
+  {
+    id: 'ask-hooks-path-config',
+    decision: 'ask',
+    reason: 'Changing core.hooksPath decides which git hooks run from now on.',
+    // Setting a value only: reading it (`git config core.hooksPath`, `--get`) and `--unset` are fine.
+    match: { command: ['/^git\\s+config\\b.*\\bcore\\.hookspath\\s+\\S/i'] },
   },
   {
     id: 'ask-destructive-git',
@@ -132,8 +142,9 @@ const recommended: PresetRule[] = [
     id: 'no-pipe-to-shell',
     decision: 'deny',
     reason: 'Piping a download straight into a shell runs unreviewed code. Download, inspect, then run.',
+    // `script`, not `commandLine`: a commit message or an echo that mentions `curl | sh` runs nothing.
     match: {
-      commandLine: [
+      script: [
         // Also through later pipes or `|&`, by path (/bin/sh), and behind sudo -E, env VAR=1 and friends.
         '/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^;&]*\\|&?\\s*(?:(?:\\S*\\/)?(?:sudo|doas|env|command|exec|nohup)\\s+(?:[^|;&]*\\s)?)?(?:\\S*\\/)?(?:ba|z|da|k|fi)?sh\\b/',
         '/\\b(?:ba|z)?sh\\s+(?:-c\\s+)?["\']?(?:\\$\\(|<\\()\\s*(?:curl|wget)\\b/',
@@ -145,13 +156,39 @@ const recommended: PresetRule[] = [
     id: 'protect-secrets',
     decision: 'deny',
     reason: 'Secrets and credentials are off-limits to agents. Ask the human for the specific value you need.',
-    match: { path: SECRET_PATHS },
+    // Reads only: `ls .env`, `cp .env.example .env` and `node --env-file=.env` show the agent nothing.
+    match: { readPath: SECRET_PATHS },
+  },
+  {
+    id: 'ask-write-secrets',
+    decision: 'ask',
+    reason: 'This creates, overwrites or deletes a secrets file.',
+    match: { writePath: SECRET_PATHS },
   },
   {
     id: 'protect-guardrails',
     decision: 'deny',
     reason: 'Agents may not edit their own guardrails or agent settings. Ask the human to make this change.',
     match: { writePath: GUARDRAIL_FILES },
+  },
+  {
+    id: 'no-guardrail-tampering',
+    decision: 'deny',
+    reason: 'Agents may not install, remove or re-trust their own guardrails. Ask the human to run this.',
+    match: { command: ['/^(?:.*\\s)?(?:\\S*\\/)?polyfence(?:\\.cjs)?\\s+(?:install|uninstall|trust|init)(?:\\s|$)/'] },
+  },
+  {
+    id: 'ask-agent-bypass',
+    decision: 'ask',
+    reason: 'Starting another agent with its approvals, sandbox, rules or hooks turned off needs a human.',
+    match: {
+      command: [
+        '/^claude\\b.*\\s(?:--dangerously-skip-permissions|--allow-dangerously-skip-permissions|--bare|--safe-mode|--settings|--setting-sources|--permission-mode[=\\s]+bypassPermissions)(?:[=\\s]|$)/',
+        '/^codex\\b.*\\s(?:--dangerously-bypass-approvals-and-sandbox|--yolo|--ignore-rules|--ignore-user-config|--dangerously-bypass-hook-trust|(?:-s|--sandbox)[=\\s]+danger-full-access)(?:\\s|$)/',
+        '/^gemini\\b.*\\s(?:--yolo|-y|--approval-mode[=\\s]+yolo)(?:\\s|$)/',
+        '/^(?:agy|antigravity)\\b.*\\s--dangerously-skip-permissions(?:\\s|$)/',
+      ],
+    },
   },
   {
     id: 'ask-outside-workspace',
@@ -163,7 +200,7 @@ const recommended: PresetRule[] = [
     id: 'ask-sudo',
     decision: 'ask',
     reason: 'Commands with elevated privileges need a human.',
-    match: { commandLine: ['/(?:^|[\\s;&|(])(?:sudo|doas)\\s/'] },
+    match: { script: ['/(?:^|[\\s;&|(])(?:sudo|doas)\\s/'] },
   },
   {
     id: 'ask-world-writable',
@@ -221,7 +258,10 @@ const recommended: PresetRule[] = [
     id: 'ask-db-destroy',
     decision: 'ask',
     reason: 'This can destroy database data.',
+    // The SQL usually sits inside quotes (`psql -c "DROP TABLE x"`), so this looks at the raw line.
+    // The `command` list keeps it off commands that only search for, print or record such text.
     match: {
+      command: ['*', ...INERT_COMMANDS.map((c) => `!${c} *`)],
       commandLine: [
         '/\\b(?:DROP\\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE\\s+TABLE)\\b/i',
         '/\\bprisma\\s+(?:migrate\\s+reset|db\\s+push\\s+.*--force-reset)\\b/',
