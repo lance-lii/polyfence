@@ -2,7 +2,7 @@ import path from 'node:path';
 import { ADAPTERS, detectAgent, type HookReply } from './adapters.js';
 import { record, type AuditContext } from './audit.js';
 import { evaluate } from './engine.js';
-import { builtinPolicy, findPolicyFile, findProjectPolicyFile, isTrusted, layerPolicies, loadPolicy, loosens, tightenOnly, trustKey, userConfigDir, userPolicyFile } from './policy.js';
+import { builtinPolicy, dropsBuiltins, findPolicyFile, findProjectPolicyFile, isTrusted, layerPolicies, loadPolicy, loosens, tightenOnly, trustKey, userConfigDir, userPolicyFile } from './policy.js';
 import type { AgentName, Outcome, Policy, ToolCall, Verdict } from './types.js';
 
 /**
@@ -21,29 +21,39 @@ export function ownPolicy(cwd: string): Policy {
 /**
  * The policy enforced for a tool call made in `cwd`, in a session that started in `projectDir`.
  *
- * Layers, each of which can only add restrictions: the user-level policy, the policy of the
- * session's project, and the policy nearest to `cwd` when that is a different file (a worktree,
- * a package with its own policy, or a directory the agent changed into). Without a project
- * policy the base is the user-level policy, or else the built-in preset.
+ * Layers, each of which can only add restrictions:
+ *   1. the base: the user-level policy, or without one the built-in preset. The preset steps
+ *      aside for a project policy that is trusted or that keeps all of its rules;
+ *   2. the policy of the session's project;
+ *   3. the policy nearest to `cwd` when that is a different file (a worktree, a package with
+ *      its own policy, or a directory the agent changed into).
+ * A project file that isn't trusted has everything that loosens it ignored.
  */
 export function policyFor(cwd: string, projectDir = cwd): Policy {
-  const project = (file: string): Policy => {
-    const policy = loadPolicy(file);
-    return loosens(policy) && !isTrusted(file) ? tightenOnly(policy) : policy;
-  };
   const userFile = userPolicyFile();
   const projectFile = findProjectPolicyFile(projectDir);
   const nearFile = findProjectPolicyFile(cwd);
+  const isNear = nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile));
 
-  const layers: Policy[] = [];
-  if (userFile) layers.push({ ...loadPolicy(userFile), root: projectDir });
-  if (projectFile) layers.push(project(projectFile));
-  if (!layers.length) layers.push(builtinPolicy(projectDir));
-  if (nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile))) layers.push(project(nearFile));
-  // The session's project stays the primary layer; a policy found near `cwd` only adds rules.
-  const primary = projectFile ? layers.findIndex((l) => l.source === path.resolve(projectFile)) : 0;
-  return layerPolicies([...layers.filter((_, i) => i !== primary), layers[primary]]);
+  const load = (file: string, standsAlone: boolean): Policy => {
+    const policy = loadPolicy(file);
+    const loosening = loosens(policy) || (standsAlone && dropsBuiltins(policy));
+    return loosening && !isTrusted(file) ? tightenOnly(policy) : policy;
+  };
+  const project = projectFile ? load(projectFile, !userFile) : undefined;
+  const near = isNear ? load(nearFile, false) : undefined;
+
+  let base: Policy | undefined;
+  if (userFile) base = { ...loadPolicy(userFile), root: project?.root ?? projectDir };
+  else if (!project || project.untrusted?.length) base = builtinPolicy(project?.root ?? projectDir);
+
+  // The session's project is the primary layer: it names the workspace, the audit log and the tests.
+  const primary = project ?? base!;
+  return layerPolicies([base, near, project].filter((l): l is Policy => l !== undefined && l !== primary).concat(primary));
 }
+
+/** Hook events that carry a tool call: Claude Code, Codex and Antigravity `PreToolUse`, Gemini `BeforeTool`. */
+const TOOL_EVENTS = new Set(['PreToolUse', 'BeforeTool']);
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length ? v : undefined);
 
@@ -69,6 +79,11 @@ export function runHook(stdin: string, agentArg?: AgentName): HookReply {
     if (!agentArg) return { exitCode: 2, stderr: `polyfence: ${reason}\n` };
     return ADAPTERS[agentArg].reply({ outcome: 'deny', reason, matched: [] }, builtinPolicy(process.cwd()));
   }
+  // Only tool-call events are checked. Any other event an agent sends (session start, stop,
+  // subagent start...) carries nothing to judge, so it gets a neutral reply instead of a verdict.
+  const event = str(input.hook_event_name);
+  if (event && !TOOL_EVENTS.has(event)) return { exitCode: 0 };
+
   const adapter = ADAPTERS[agentArg ?? detectAgent(input)];
   const workspace = adapter.workspace(input);
 

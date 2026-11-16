@@ -50,9 +50,9 @@ export function findPolicyFile(start: string): string | undefined {
 // ---- trust ---------------------------------------------------------------------
 //
 // A project policy can come from anywhere: a cloned repository, a pull, a directory the agent
-// changed into. It may always tighten what agents can do. Settings that loosen it (`allow` rules,
-// `default: allow`, `onError: allow`) count only once the user has run `polyfence trust` on that
-// exact file content.
+// changed into. It may always tighten what agents can do. What loosens it counts only once the
+// user has run `polyfence trust` on that exact file content: `allow` rules, `default: allow`,
+// `onError: allow`, and leaving out, disabling or replacing rules of the built-in preset.
 
 const trustFile = () => path.join(userConfigDir(), 'trusted.json');
 
@@ -105,6 +105,16 @@ export function setTrust(file: string, revoke = false): void {
 /** Does the policy contain settings that loosen what agents may do? */
 export function loosens(policy: Policy): boolean {
   return policy.default === 'allow' || policy.onError === 'allow' || policy.rules.some((r) => r.decision === 'allow');
+}
+
+/**
+ * Does the policy leave out, disable or replace a rule of the built-in `recommended` preset?
+ * With no user-level policy that preset is what a project would get without a policy file, so an
+ * untrusted file can't take it away.
+ */
+export function dropsBuiltins(policy: Policy): boolean {
+  const mine = new Map(policy.rules.map((r) => [r.id, r]));
+  return PRESETS.recommended.some((r) => mine.get(r.id)?.preset === undefined);
 }
 
 /** The same policy with everything that loosens it removed. */

@@ -44,12 +44,24 @@ export function parseShell(src: string): Segment[] {
  * Every command a shell string would run, plus the shell code itself at each nesting level
  * (the string, each `bash -c` script, each `$(...)`) with quoted text blanked: see `maskQuoted`.
  */
-export function parseScript(src: string): { segments: Segment[]; scripts: string[] } {
+export function parseScript(src: string, opts: { powershell?: boolean } = {}): { segments: Segment[]; scripts: string[] } {
   const segments: Segment[] = [];
   const scripts: string[] = [];
-  collect(src, 0, segments, scripts);
+  literalBackslash = opts.powershell === true;
+  try {
+    collect(src, 0, segments, scripts);
+  } finally {
+    literalBackslash = false;
+  }
   return { segments, scripts };
 }
+
+/**
+ * PowerShell isn't sh, but commands, flags, quotes, `;`, `|` and `&&` are close enough to check.
+ * The one difference that matters here: `\` separates path components instead of escaping.
+ */
+let literalBackslash = false;
+const isEscape = (ch: string) => ch === '\\' && !literalBackslash;
 
 function collect(src: string, depth: number, out: Segment[], scripts: string[]): void {
   if (depth > MAX_DEPTH || !src.trim()) return;
@@ -60,6 +72,8 @@ function collect(src: string, depth: number, out: Segment[], scripts: string[]):
     if (!seg) continue;
     out.push(seg);
     for (const inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out, scripts);
+    // `docker exec app sh -c '...'`: a wrapped command can run a script of its own.
+    for (const tail of tailArgvs(seg.argv)) for (const inner of innerScript(tail, [])) collect(inner, depth + 1, out, scripts);
   }
   for (const n of nested) collect(n, depth + 1, out, scripts);
 }
@@ -111,7 +125,7 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
   while (i < n) {
     const c = src[i];
 
-    if (c === '\\') {
+    if (isEscape(c)) {
       if (src[i + 1] === '\n') {
         i += 2;
         continue;
@@ -150,7 +164,7 @@ function tokenize(src: string, nested: string[]): RawSeg[] {
       quoted = true;
       i++;
       while (i < n && src[i] !== '"') {
-        if (src[i] === '\\' && i + 1 < n && '"\\$`\n'.includes(src[i + 1])) {
+        if (isEscape(src[i]) && i + 1 < n && '"\\$`\n'.includes(src[i + 1])) {
           if (src[i + 1] !== '\n') word += src[i + 1];
           i += 2;
         } else if (src[i] === '$' && src[i + 1] === '(') {
@@ -282,7 +296,7 @@ function readParen(src: string, open: number): [string, number] {
   let i = open;
   while (i < n) {
     const c = src[i];
-    if (c === '\\') {
+    if (isEscape(c)) {
       i += 2;
       continue;
     }
@@ -293,7 +307,7 @@ function readParen(src: string, open: number): [string, number] {
     }
     if (c === '"') {
       i++;
-      while (i < n && src[i] !== '"') i += src[i] === '\\' ? 2 : 1;
+      while (i < n && src[i] !== '"') i += isEscape(src[i]) ? 2 : 1;
       i++;
       continue;
     }
@@ -349,7 +363,7 @@ export function maskQuoted(src: string): string {
   while (i < n) {
     const c = src[i];
     const isSubstitution = c === '`' || (c === '$' && src[i + 1] === '(');
-    if (c === '\\') {
+    if (isEscape(c)) {
       out += src.slice(i, i + 2);
       i += 2;
     } else if (c === "'") {
@@ -365,7 +379,7 @@ export function maskQuoted(src: string): string {
       out += '"';
       i++;
       while (i < n && src[i] !== '"') {
-        if (src[i] === '\\') i += 2;
+        if (isEscape(src[i])) i += 2;
         else if (src[i] === '`' || (src[i] === '$' && src[i + 1] === '(')) substitution();
         else i++;
       }
@@ -459,9 +473,11 @@ function ansiC(body: string): string {
   });
 }
 
+/** `/usr/bin/git`, `C:\Tools\git.exe` and `git.exe` (also from WSL) all run git. */
 function basename(word: string): string {
-  const idx = word.lastIndexOf('/');
-  return idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+  const idx = Math.max(word.lastIndexOf('/'), word.lastIndexOf('\\'));
+  const name = idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+  return name.replace(/\.(?:exe|cmd|bat)$/i, '') || name;
 }
 
 /** The command a word runs: `/usr/bin/GIT` is git where file names ignore case. */
@@ -540,6 +556,35 @@ function stripGitGlobals(args: string[]): string[] {
 /** Stands in for an argument that contains whitespace when `command` patterns are matched. */
 export const FREE_TEXT = '<text>';
 
+const masked = (argv: string[]) => argv.map((w) => (/\s/.test(w) ? FREE_TEXT : w)).join(' ');
+
+/** Commands that print, look up or search for their arguments and never run them. */
+const INERT = new Set(['polyfence', 'echo', 'printf', 'man', 'which', 'type', 'whatis', 'apropos', 'whereis', 'grep', 'egrep', 'fgrep', 'rg', 'ag']);
+/** Tools whose first argument is a subcommand of their own: `git rm` is not `rm`. */
+const SUBCOMMAND_TOOLS = new Set(
+  'git hg svn docker podman kubectl helm npm pnpm yarn bun brew cargo go pip pip3 gem apt apt-get dnf yum gh glab aws gcloud az gsutil terraform tofu'.split(' '),
+);
+const MAX_TAILS = 16;
+
+/**
+ * No list of wrappers is ever complete (`op run --`, `aws-vault exec`, `docker exec`, `chrt`,
+ * `find -exec`...), so every later argument that could start a command is also read as one.
+ * Skipped: options, quoted text, the arguments of commands that only print or search, and the
+ * subcommand of tools such as git.
+ */
+function tailArgvs(argv: string[]): string[][] {
+  if (argv.length < 2 || INERT.has(argv[0])) return [];
+  const out: string[][] = [];
+  for (let i = SUBCOMMAND_TOOLS.has(argv[0]) ? 2 : 1; i < argv.length && out.length < MAX_TAILS; i++) {
+    // Everything after a command that only prints or searches is its argument, not a command.
+    if (INERT.has(commandName(argv[i]))) break;
+    if (argv[i].startsWith('-') || /\s/.test(argv[i]) || !/^[\w./~]/.test(argv[i])) continue;
+    const tail = stripWrappers(argv.slice(i));
+    if (tail.length) out.push(tail);
+  }
+  return out;
+}
+
 function normalize(raw: RawSeg): Segment | undefined {
   if (raw.words.length && DROP_SEGMENT.has(raw.words[0])) return undefined;
   const argv = stripWrappers(raw.words);
@@ -550,7 +595,8 @@ function normalize(raw: RawSeg): Segment | undefined {
     redirects: raw.redirects,
     inputRedirects: raw.inputRedirects,
     text: argv.join(' '),
-    matchText: argv.map((w) => (/\s/.test(w) ? FREE_TEXT : w)).join(' '),
+    matchText: masked(argv),
+    tails: tailArgvs(argv).map(masked),
   };
 }
 

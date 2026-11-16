@@ -90,7 +90,7 @@ The `reason` goes back to the agent, so it changes course instead of retrying th
 - **🧠 It reads shell like a shell does.** Commands are parsed, not prefix-matched: `&&`, `;`, pipes, `$(...)`, backticks, `bash -c`, `eval`, `sudo`, `env`, `VAR=1`, `timeout`, `xargs`, `git -C`, and heredoc bodies. Quoted text is not code: a commit message that *mentions* `rm -rf /`, `sudo` or `curl | sh` doesn't trip anything.
 - **🔑 It sees paths inside commands.** `cat .env`, `cp key.pem /tmp`, `echo x > ../other/file` and `sed -i ... polyfence.yaml` are checked against your path rules, not just the agents' file tools. It also tells reading from writing: `cat .env` is blocked, `ls .env` and `node --env-file=.env app.js` are not.
 - **🔒 Agents can't quietly turn it off.** The default policy blocks agents from editing `polyfence.yaml`, `.claude/settings.json`, `.codex/*`, `.gemini/*` and `.agents/hooks.json`, through file tools *or* the shell, and from running `polyfence install`, `uninstall`, `trust` or `init`. Starting another agent with its approvals or hooks switched off (`--dangerously-skip-permissions`, `--yolo`, `--bare`...) needs your approval.
-- **🧷 A repository can't loosen your rules.** Your user-level policy keeps applying under every project policy, and a project policy's `allow` settings do nothing until you run `polyfence trust` on that file.
+- **🧷 A repository can't loosen your rules.** Your user-level policy keeps applying under every project policy. Until you run `polyfence trust` on a project's policy file, its `allow` settings do nothing and it can't drop or replace the built-in rules.
 - **🧪 Policies have tests.** `polyfence test` runs the `tests:` in your policy. Put it in CI and guardrail changes get reviewed like code.
 - **🧱 Two layers.** The hook is the main enforcement point. `install` also compiles what it can into Codex `prefix_rule`s and Gemini policy-engine TOML, so a missing or broken hook still leaves the native layer in place.
 - **📜 Audit log.** Every decision lands in `.polyfence/audit.jsonl`. `polyfence log --deny` shows you what your agents tried.
@@ -258,14 +258,19 @@ The hook looks for `polyfence.yaml` (or `.polyfence.yaml`, `polyfence.yml`, `.po
 Policies are layered, and a layer can only add restrictions to the others:
 
 1. `~/.config/polyfence/polyfence.yaml`, your user-level policy, if you have one.
-2. The project's policy. Without one, and without a user-level policy, the built-in `recommended` preset.
+2. The project's policy. If you have no user-level policy, the built-in `recommended` preset stands in for it: it applies when there is no project policy, and under a project policy that drops some of its rules and isn't trusted (see below).
 3. The policy nearest to the current directory, if that is a different file: a package with its own policy, or a git worktree.
 
 Every matching rule from every layer counts and the most restrictive wins, so a project's `disable:` or a replaced rule id never switches off a rule from your user-level policy. Relative path patterns are rooted at the directory of the file they come from.
 
 ### Trusting a project policy
 
-A project policy arrives with the repository, so anyone who can change the repository can change it. It can always tighten. What loosens (`allow` rules, `default: allow` and `onError: allow`) is ignored until you trust the file:
+A project policy arrives with the repository, so anyone who can change the repository can change it. It can always tighten. What loosens is ignored until you trust the file:
+
+- `allow` rules, `default: allow` and `onError: allow`;
+- when you have no user-level policy: leaving out, disabling (`disable:`) or replacing rules of the built-in `recommended` preset. Until then the preset stays on underneath.
+
+A policy from `polyfence init` that only adds rules needs no trust.
 
 ```bash
 polyfence trust            # trust the current content of this project's policy
@@ -298,9 +303,13 @@ jobs:
 - Commands built at run time: variables (`x=git; $x push -f`), brace expansion (`{git,push} --force`), git aliases (`git -c alias.p='push -f' p`), and globs the shell expands into protected files (`cat .env*`).
 - Code run by another interpreter: `python -c`, `node -e`, or a script the agent writes and then runs.
 - Shell input that isn't a download or a heredoc the shell reads, such as `echo 'git push -f' | bash` or `cat <<EOF | sh`.
-- `cd` inside one command (`cd ~/.aws && cat credentials`), wrapper options polyfence doesn't parse (`find -exec`, `env -S`, `sudo -iu user`, which is still asked about as `sudo`), and wrappers it doesn't know (`docker exec`, `parallel`, `chrt`, `taskset`). The ones it does know include `sudo`, `env`, `timeout`, `nice`, `xargs`, `time`, `nohup`, `setsid`, `caffeinate`, `flock`, `strace`, `watch`, `ssh`, `su -c` and `npx -c`.
+- `cd` inside one command (`cd ~/.aws && cat credentials`), and wrapper options that take a script as one string and that polyfence doesn't parse: `env -S "git push -f"`, `sudo -iu user`, which is still asked about as `sudo`.
 - Reads that don't name the file: a search over a directory that contains `.env` (`grep -r KEY .`, or a search tool pointed at `.`), and a program that prints what it was given (`node --env-file=.env -p process.env`).
 - Writes it doesn't model: `curl -O` and plain `wget URL` (named after the URL), `curl --output-dir`, `git checkout <ref> -- <file>`, unpacked archives, and persistent settings such as `git config core.hooksPath`.
+
+**What about wrappers it has never heard of?** `command` patterns are also tried against every later argument that could start a command, so `op run -- git push -f`, `docker exec app rm -rf /`, `chrt 10 git push -f` and `find . -exec git push -f \;` are caught without a list. Three things are skipped so ordinary commands stay quiet: quoted text, the arguments of commands that only print or search (`echo`, `grep`, `man`...), and the subcommand of tools such as `git`, `docker` and `npm` (`git rm` is not `rm`). The price is that an unquoted mention can match: `somecmd git push -f` is treated as a force-push.
+
+**Does it work on Windows?** Path rules understand drive letters, backslashes, Git Bash paths (`/c/Users/...`) and `~`, and names such as `git.exe`. Claude Code's `PowerShell` tool is parsed with `\` as a path separator; PowerShell-only syntax (backtick escapes, `Remove-Item -Recurse` as a spelling of `rm -r`) is not understood, so write rules for the cmdlets you care about. CI runs the tests on Windows without gating on them yet, and the Gemini static TOML layer is not adapted to Windows paths.
 
 **Does it phone home?** No. It reads your policy, makes a decision locally and appends one line to a local log.
 

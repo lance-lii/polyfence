@@ -114,6 +114,30 @@ test('hook: a project policy cannot auto-approve until it is trusted, and edits 
   assert.equal(ls(), 'defer');
 });
 
+test('hook: an untrusted project policy cannot drop the built-in rules', () => {
+  for (const policy of ['version: 1\n', 'extends: [recommended]\ndisable: [no-force-push]\n', 'extends: [recommended]\nrules:\n  - id: no-force-push\n    match: { command: "never *" }\n']) {
+    const dir = project(policy);
+    const push = () => decision(cli(['hook', 'claude'], dir, bash('git push --force', dir)));
+    assert.equal(push(), 'deny', policy);
+    assert.match(cli(['doctor'], dir).out, /not trusted/);
+    assert.equal(cli(['trust'], dir).code, 0);
+    assert.equal(push(), 'defer', policy);
+    assert.match(cli(['doctor'], dir).out, /applies as written/);
+  }
+  // A policy that keeps every built-in rule needs no trust, whatever it adds.
+  const full = project('extends: [strict]\nrules:\n  - id: mine\n    match: { command: "make deploy *" }\n    decision: deny\n');
+  assert.doesNotMatch(cli(['doctor'], full).out, /not trusted/);
+});
+
+test('hook: events that carry no tool call get a neutral reply', () => {
+  const dir = project('default: deny\n');
+  for (const hook_event_name of ['Stop', 'SessionStart', 'SubagentStart', 'UserPromptSubmit', 'PostToolUse']) {
+    const r = cli(['hook', 'claude'], dir, JSON.stringify({ hook_event_name, cwd: dir, session_id: 's' }));
+    assert.deepEqual([r.code, r.out], [0, ''], hook_event_name);
+  }
+  assert.ok(!fs.existsSync(path.join(dir, '.polyfence', 'audit.jsonl')));
+});
+
 test('hook: the user-level policy still applies under a project policy', () => {
   const dir = project('version: 1\nrules: []\n');
   const user = path.join(dir, '.xdg', 'polyfence');

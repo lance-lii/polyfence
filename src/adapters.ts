@@ -101,9 +101,9 @@ function claudeLikeCall(agent: AgentName, input: Json): ToolCall {
   switch (tool) {
     case 'Bash':
     case 'BashOutput':
-    // PowerShell isn't sh, but commands, flags, `;`, `|` and `&&` are close enough to check.
-    case 'PowerShell':
       return shellCall(str(ti.command) ?? '', base);
+    case 'PowerShell':
+      return shellCall(str(ti.command) ?? '', base, { powershell: true });
     case 'Read':
     case 'NotebookRead':
       return fileCall('read', [str(ti.file_path) ?? str(ti.notebook_path) ?? ''], base);
@@ -246,7 +246,7 @@ function geminiCall(input: Json): ToolCall {
   if (kind === 'shell') {
     const call = shellCall(str(ti.command) ?? '', base);
     const dir = str(ti.directory) ?? str(ti.dir_path);
-    return dir ? { ...call, cwd: dir.startsWith('/') ? dir : `${base.cwd}/${dir}` } : call;
+    return dir ? { ...call, cwd: path.resolve(base.cwd, dir) } : call;
   }
   if (kind === 'fetch') {
     const urls = [str(ti.url), ...(str(ti.prompt)?.match(/https?:\/\/\S+/g) ?? [])].filter(Boolean) as string[];
