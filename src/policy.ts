@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,20 +20,146 @@ export class PolicyError extends Error {
   }
 }
 
-/** Walk up from `start` looking for a policy file, then fall back to the user config dir. */
-export function findPolicyFile(start: string): string | undefined {
-  let dir = path.resolve(start);
-  for (;;) {
-    for (const name of POLICY_FILENAMES) {
-      const candidate = path.join(dir, name);
-      if (fs.existsSync(candidate)) return candidate;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+/** The user-level policy file, if there is one. */
+export function userPolicyFile(): string | undefined {
   const user = path.join(userConfigDir(), 'polyfence.yaml');
   return fs.existsSync(user) ? user : undefined;
+}
+
+/** Walk up from `start` looking for a project policy file. */
+export function findProjectPolicyFile(start: string): string | undefined {
+  let dir = path.resolve(start);
+  for (;;) {
+    if (dir !== userConfigDir()) {
+      for (const name of POLICY_FILENAMES) {
+        const candidate = path.join(dir, name);
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/** The nearest project policy file, or else the user-level one. */
+export function findPolicyFile(start: string): string | undefined {
+  return findProjectPolicyFile(start) ?? userPolicyFile();
+}
+
+// ---- trust ---------------------------------------------------------------------
+//
+// A project policy can come from anywhere: a cloned repository, a pull, a directory the agent
+// changed into. It may always tighten what agents can do. What loosens it counts only once the
+// user has run `polyfence trust` on that exact file content: `allow` rules, `default: allow`,
+// `onError: allow`, and leaving out, disabling or replacing rules of the built-in preset.
+
+const trustFile = () => path.join(userConfigDir(), 'trusted.json');
+
+/** Trust is keyed by the real path, so `/tmp/x` and `/private/tmp/x` are the same file. */
+export function trustKey(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return path.resolve(file);
+  }
+}
+
+function readTrust(): Record<string, string> {
+  try {
+    const data = JSON.parse(fs.readFileSync(trustFile(), 'utf8'));
+    return isObj(data) ? (data as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function fileHash(file: string): string | undefined {
+  try {
+    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  } catch {
+    return undefined;
+  }
+}
+
+export function isTrusted(file: string): boolean {
+  const abs = trustKey(file);
+  const hash = fileHash(abs);
+  return hash !== undefined && readTrust()[abs] === hash;
+}
+
+/** Record (or with `revoke`, forget) the current content of a policy file as trusted. */
+export function setTrust(file: string, revoke = false): void {
+  const abs = trustKey(file);
+  const store = readTrust();
+  if (revoke) delete store[abs];
+  else {
+    const hash = fileHash(abs);
+    if (!hash) throw new PolicyError('cannot read policy', abs);
+    store[abs] = hash;
+  }
+  fs.mkdirSync(userConfigDir(), { recursive: true });
+  fs.writeFileSync(trustFile(), JSON.stringify(store, null, 2) + '\n');
+}
+
+/** Does the policy contain settings that loosen what agents may do? */
+export function loosens(policy: Policy): boolean {
+  return policy.default === 'allow' || policy.onError === 'allow' || policy.rules.some((r) => r.decision === 'allow');
+}
+
+/**
+ * Does the policy leave out, disable or replace a rule of the built-in `recommended` preset?
+ * With no user-level policy that preset is what a project would get without a policy file, so an
+ * untrusted file can't take it away.
+ */
+export function dropsBuiltins(policy: Policy): boolean {
+  const mine = new Map(policy.rules.map((r) => [r.id, r]));
+  return PRESETS.recommended.some((r) => mine.get(r.id)?.preset === undefined);
+}
+
+/** The same policy with everything that loosens it removed. */
+export function tightenOnly(policy: Policy): Policy {
+  return {
+    ...policy,
+    default: policy.default === 'allow' ? 'defer' : policy.default,
+    onError: 'deny',
+    rules: policy.rules.filter((r) => r.decision !== 'allow'),
+    untrusted: policy.source ? [policy.source] : [],
+  };
+}
+
+const DEFAULT_RANK = { allow: 0, defer: 1, ask: 2, deny: 3 } as const;
+const AUDIT_RANK = { off: 0, matched: 1, all: 2 } as const;
+
+/**
+ * Combine policies so that each can only add restrictions to the others. Every rule keeps the
+ * workspace root of the file it came from. The last layer is the primary one: its file names
+ * the workspace, the audit log and the tests.
+ */
+export function layerPolicies(layers: Policy[]): Policy {
+  const primary = layers[layers.length - 1];
+  if (layers.length === 1) return primary;
+  const rules: Rule[] = [];
+  const seen = new Set<string>();
+  for (const layer of layers) {
+    for (const rule of layer.rules) {
+      const stamped = { ...rule, root: rule.root ?? layer.root };
+      const key = JSON.stringify([stamped.id, stamped.decision, stamped.match, stamped.root]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rules.push(stamped);
+    }
+  }
+  const most = <T extends string>(rank: Record<T, number>, values: T[]): T => values.reduce((a, b) => (rank[b] > rank[a] ? b : a));
+  return {
+    ...primary,
+    default: most(DEFAULT_RANK, layers.map((l) => l.default)),
+    askFallback: layers.some((l) => l.askFallback === 'deny') ? 'deny' : 'defer',
+    audit: most(AUDIT_RANK, layers.map((l) => l.audit)),
+    onError: layers.some((l) => l.onError === 'deny') ? 'deny' : 'allow',
+    rules,
+    untrusted: layers.flatMap((l) => l.untrusted ?? []),
+  };
 }
 
 export function loadPolicy(file: string): Policy {
@@ -60,7 +187,8 @@ export function builtinPolicy(root: string, preset = 'recommended'): Policy {
 
 const DECISIONS = ['allow', 'ask', 'deny'];
 const OUTCOMES = [...DECISIONS, 'defer'];
-const MATCH_KEYS = ['tool', 'rawTool', 'agent', 'command', 'commandLine', 'path', 'writePath', 'url', 'outsideWorkspace'];
+const MATCH_KEYS = ['tool', 'rawTool', 'agent', 'command', 'commandLine', 'script', 'path', 'readPath', 'writePath', 'url', 'outsideWorkspace'];
+const PATH_KEYS = ['path', 'readPath', 'writePath'];
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -112,8 +240,8 @@ function parseMatch(raw: unknown, where: string, file?: string): MatchSpec {
     }
     match.agent = agents as MatchSpec['agent'];
   }
-  for (const key of ['rawTool', 'command', 'commandLine', 'path', 'writePath', 'url'] as const) {
-    const list = strList(raw[key], `${where}.match.${key}`, file, key === 'path' || key === 'writePath');
+  for (const key of ['rawTool', 'command', 'commandLine', 'script', 'path', 'readPath', 'writePath', 'url'] as const) {
+    const list = strList(raw[key], `${where}.match.${key}`, file, PATH_KEYS.includes(key));
     if (list) match[key] = list;
   }
   if (raw.outsideWorkspace !== undefined) {

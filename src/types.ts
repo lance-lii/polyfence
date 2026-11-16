@@ -18,8 +18,19 @@ export interface Segment {
   redirects: string[];
   /** Targets of input redirects (`<`). Kept out of writes but still in paths. */
   inputRedirects: string[];
-  /** argv joined by single spaces; this is what `command` patterns match. */
+  /** argv joined by single spaces; shown by `check --explain`. */
   text: string;
+  /**
+   * What `command` patterns match: `text`, with every argument that contains whitespace (a quoted
+   * commit message, a SQL string, an inline script) replaced by `<text>`. Flags are never hidden
+   * this way: a program receives such an argument as one word, so it cannot be a flag.
+   */
+  matchText: string;
+  /**
+   * Commands the segment may be wrapping, in the same form as `matchText`: the words from each
+   * later argument on, as in `op run -- git push -f` or `docker exec app rm -rf /`.
+   */
+  tails: string[];
 }
 
 /** A tool call normalized from any agent's hook payload. */
@@ -33,8 +44,12 @@ export interface ToolCall {
   segments: Segment[];
   /** Every path the call touches (reads or writes). */
   paths: string[];
+  /** Paths whose contents the call can read. */
+  reads: string[];
   /** Paths the call modifies. */
   writes: string[];
+  /** Shell code the call runs, at every nesting level, with quoted text and heredoc data blanked. */
+  scripts: string[];
   urls: string[];
   cwd: string;
 }
@@ -45,7 +60,9 @@ export interface MatchSpec {
   agent?: AgentName | AgentName[];
   command?: string | string[];
   commandLine?: string | string[];
+  script?: string | string[];
   path?: string | string[];
+  readPath?: string | string[];
   writePath?: string | string[];
   url?: string | string[];
   outsideWorkspace?: boolean;
@@ -58,6 +75,8 @@ export interface Rule {
   reason?: string;
   /** Name of the preset the rule came from, if any. */
   preset?: string;
+  /** Workspace root of the policy file the rule came from, when policies are layered. */
+  root?: string;
 }
 
 export interface PolicyTest {
@@ -88,6 +107,8 @@ export interface Policy {
   source?: string;
   /** Directory treated as the workspace root. */
   root: string;
+  /** Project policy files whose `allow` settings were ignored because the file is not trusted. */
+  untrusted?: string[];
 }
 
 export interface Verdict {

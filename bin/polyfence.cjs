@@ -87,15 +87,15 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path8) {
-      let ctrl = callVisitor(key, node, visitor, path8);
+    function visit_(key, node, visitor, path9) {
+      let ctrl = callVisitor(key, node, visitor, path9);
       if (identity.isNode(ctrl) || identity.isPair(ctrl))
-        return replaceNode(key, path8, ctrl), visit_(key, ctrl, visitor, path8);
+        return replaceNode(key, path9, ctrl), visit_(key, ctrl, visitor, path9);
       if (typeof ctrl != "symbol") {
         if (identity.isCollection(node)) {
-          path8 = Object.freeze(path8.concat(node));
+          path9 = Object.freeze(path9.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            let ci = visit_(i, node.items[i], visitor, path8);
+            let ci = visit_(i, node.items[i], visitor, path9);
             if (typeof ci == "number")
               i = ci - 1;
             else {
@@ -105,12 +105,12 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path8 = Object.freeze(path8.concat(node));
-          let ck = visit_("key", node.key, visitor, path8);
+          path9 = Object.freeze(path9.concat(node));
+          let ck = visit_("key", node.key, visitor, path9);
           if (ck === BREAK)
             return BREAK;
           ck === REMOVE && (node.key = null);
-          let cv = visit_("value", node.value, visitor, path8);
+          let cv = visit_("value", node.value, visitor, path9);
           if (cv === BREAK)
             return BREAK;
           cv === REMOVE && (node.value = null);
@@ -125,15 +125,15 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path8) {
-      let ctrl = await callVisitor(key, node, visitor, path8);
+    async function visitAsync_(key, node, visitor, path9) {
+      let ctrl = await callVisitor(key, node, visitor, path9);
       if (identity.isNode(ctrl) || identity.isPair(ctrl))
-        return replaceNode(key, path8, ctrl), visitAsync_(key, ctrl, visitor, path8);
+        return replaceNode(key, path9, ctrl), visitAsync_(key, ctrl, visitor, path9);
       if (typeof ctrl != "symbol") {
         if (identity.isCollection(node)) {
-          path8 = Object.freeze(path8.concat(node));
+          path9 = Object.freeze(path9.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            let ci = await visitAsync_(i, node.items[i], visitor, path8);
+            let ci = await visitAsync_(i, node.items[i], visitor, path9);
             if (typeof ci == "number")
               i = ci - 1;
             else {
@@ -143,12 +143,12 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path8 = Object.freeze(path8.concat(node));
-          let ck = await visitAsync_("key", node.key, visitor, path8);
+          path9 = Object.freeze(path9.concat(node));
+          let ck = await visitAsync_("key", node.key, visitor, path9);
           if (ck === BREAK)
             return BREAK;
           ck === REMOVE && (node.key = null);
-          let cv = await visitAsync_("value", node.value, visitor, path8);
+          let cv = await visitAsync_("value", node.value, visitor, path9);
           if (cv === BREAK)
             return BREAK;
           cv === REMOVE && (node.value = null);
@@ -171,22 +171,22 @@ var require_visit = __commonJS({
         Seq: visitor.Collection
       }, visitor) : visitor;
     }
-    function callVisitor(key, node, visitor, path8) {
+    function callVisitor(key, node, visitor, path9) {
       if (typeof visitor == "function")
-        return visitor(key, node, path8);
+        return visitor(key, node, path9);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path8);
+        return visitor.Map?.(key, node, path9);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path8);
+        return visitor.Seq?.(key, node, path9);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path8);
+        return visitor.Pair?.(key, node, path9);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path8);
+        return visitor.Scalar?.(key, node, path9);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path8);
+        return visitor.Alias?.(key, node, path9);
     }
-    function replaceNode(key, path8, node) {
-      let parent = path8[path8.length - 1];
+    function replaceNode(key, path9, node) {
+      let parent = path9[path9.length - 1];
       if (identity.isCollection(parent))
         parent.items[key] = node;
       else if (identity.isPair(parent))
@@ -642,10 +642,10 @@ var require_Collection = __commonJS({
   "node_modules/yaml/dist/nodes/Collection.js"(exports2) {
     "use strict";
     var createNode = require_createNode(), identity = require_identity(), Node = require_Node();
-    function collectionFromPath(schema, path8, value) {
+    function collectionFromPath(schema, path9, value) {
       let v = value;
-      for (let i = path8.length - 1; i >= 0; --i) {
-        let k = path8[i];
+      for (let i = path9.length - 1; i >= 0; --i) {
+        let k = path9[i];
         if (typeof k == "number" && Number.isInteger(k) && k >= 0) {
           let a = [];
           a[k] = v, v = a;
@@ -662,7 +662,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path8) => path8 == null || typeof path8 == "object" && !!path8[Symbol.iterator]().next().done, Collection = class extends Node.NodeBase {
+    var isEmptyPath = (path9) => path9 == null || typeof path9 == "object" && !!path9[Symbol.iterator]().next().done, Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type), Object.defineProperty(this, "schema", {
           value: schema,
@@ -685,11 +685,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path8, value) {
-        if (isEmptyPath(path8))
+      addIn(path9, value) {
+        if (isEmptyPath(path9))
           this.add(value);
         else {
-          let [key, ...rest] = path8, node = this.get(key, !0);
+          let [key, ...rest] = path9, node = this.get(key, !0);
           if (identity.isCollection(node))
             node.addIn(rest, value);
           else if (node === void 0 && this.schema)
@@ -702,8 +702,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path8) {
-        let [key, ...rest] = path8;
+      deleteIn(path9) {
+        let [key, ...rest] = path9;
         if (rest.length === 0)
           return this.delete(key);
         let node = this.get(key, !0);
@@ -716,8 +716,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path8, keepScalar) {
-        let [key, ...rest] = path8, node = this.get(key, !0);
+      getIn(path9, keepScalar) {
+        let [key, ...rest] = path9, node = this.get(key, !0);
         return rest.length === 0 ? !keepScalar && identity.isScalar(node) ? node.value : node : identity.isCollection(node) ? node.getIn(rest, keepScalar) : void 0;
       }
       hasAllNullValues(allowScalar) {
@@ -731,8 +731,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path8) {
-        let [key, ...rest] = path8;
+      hasIn(path9) {
+        let [key, ...rest] = path9;
         if (rest.length === 0)
           return this.has(key);
         let node = this.get(key, !0);
@@ -742,8 +742,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path8, value) {
-        let [key, ...rest] = path8;
+      setIn(path9, value) {
+        let [key, ...rest] = path9;
         if (rest.length === 0)
           this.set(key, value);
         else {
@@ -767,14 +767,14 @@ var require_Collection = __commonJS({
 var require_stringifyComment = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyComment.js"(exports2) {
     "use strict";
-    var stringifyComment = (str2) => str2.replace(/^(?!$)(?: $)?/gm, "#");
+    var stringifyComment = (str3) => str3.replace(/^(?!$)(?: $)?/gm, "#");
     function indentComment(comment, indent) {
       return /^\n+$/.test(comment) ? comment.substring(1) : indent ? comment.replace(/^(?! *$)/gm, indent) : comment;
     }
-    var lineComment = (str2, indent, comment) => str2.endsWith(`
+    var lineComment = (str3, indent, comment) => str3.endsWith(`
 `) ? indentComment(comment, indent) : comment.includes(`
 `) ? `
-` + indentComment(comment, indent) : (str2.endsWith(" ") ? "" : " ") + comment;
+` + indentComment(comment, indent) : (str3.endsWith(" ") ? "" : " ") + comment;
     exports2.indentComment = indentComment;
     exports2.lineComment = lineComment;
     exports2.stringifyComment = stringifyComment;
@@ -844,10 +844,10 @@ var require_foldFlowLines = __commonJS({
       onFold && onFold();
       let res = text.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
-        let fold2 = folds[i2], end2 = folds[i2 + 1] || text.length;
-        fold2 === 0 ? res = `
-${indent}${text.slice(0, end2)}` : (mode === FOLD_QUOTED && escapedFolds[fold2] && (res += `${text[fold2]}\\`), res += `
-${indent}${text.slice(fold2 + 1, end2)}`);
+        let fold = folds[i2], end2 = folds[i2 + 1] || text.length;
+        fold === 0 ? res = `
+${indent}${text.slice(0, end2)}` : (mode === FOLD_QUOTED && escapedFolds[fold] && (res += `${text[fold]}\\`), res += `
+${indent}${text.slice(fold + 1, end2)}`);
       }
       return res;
     }
@@ -880,15 +880,15 @@ var require_stringifyString = __commonJS({
       indentAtStart: isBlock ? ctx.indent.length : ctx.indentAtStart,
       lineWidth: ctx.options.lineWidth,
       minContentWidth: ctx.options.minContentWidth
-    }), containsDocumentMarker = (str2) => /^(%|---|\.\.\.)/m.test(str2);
-    function lineLengthOverLimit(str2, lineWidth, indentLength) {
+    }), containsDocumentMarker = (str3) => /^(%|---|\.\.\.)/m.test(str3);
+    function lineLengthOverLimit(str3, lineWidth, indentLength) {
       if (!lineWidth || lineWidth < 0)
         return !1;
-      let limit = lineWidth - indentLength, strLen = str2.length;
+      let limit = lineWidth - indentLength, strLen = str3.length;
       if (strLen <= limit)
         return !1;
       for (let i = 0, start = 0; i < strLen; ++i)
-        if (str2[i] === `
+        if (str3[i] === `
 `) {
           if (i - start > limit)
             return !0;
@@ -901,41 +901,41 @@ var require_stringifyString = __commonJS({
       let json = JSON.stringify(value);
       if (ctx.options.doubleQuotedAsJSON)
         return json;
-      let { implicitKey } = ctx, minMultiLineLength = ctx.options.doubleQuotedMinMultiLineLength, indent = ctx.indent || (containsDocumentMarker(value) ? "  " : ""), str2 = "", start = 0;
+      let { implicitKey } = ctx, minMultiLineLength = ctx.options.doubleQuotedMinMultiLineLength, indent = ctx.indent || (containsDocumentMarker(value) ? "  " : ""), str3 = "", start = 0;
       for (let i = 0, ch = json[i]; ch; ch = json[++i])
-        if (ch === " " && json[i + 1] === "\\" && json[i + 2] === "n" && (str2 += json.slice(start, i) + "\\ ", i += 1, start = i, ch = "\\"), ch === "\\")
+        if (ch === " " && json[i + 1] === "\\" && json[i + 2] === "n" && (str3 += json.slice(start, i) + "\\ ", i += 1, start = i, ch = "\\"), ch === "\\")
           switch (json[i + 1]) {
             case "u":
               {
-                str2 += json.slice(start, i);
+                str3 += json.slice(start, i);
                 let code = json.substr(i + 2, 4);
                 switch (code) {
                   case "0000":
-                    str2 += "\\0";
+                    str3 += "\\0";
                     break;
                   case "0007":
-                    str2 += "\\a";
+                    str3 += "\\a";
                     break;
                   case "000b":
-                    str2 += "\\v";
+                    str3 += "\\v";
                     break;
                   case "001b":
-                    str2 += "\\e";
+                    str3 += "\\e";
                     break;
                   case "0085":
-                    str2 += "\\N";
+                    str3 += "\\N";
                     break;
                   case "00a0":
-                    str2 += "\\_";
+                    str3 += "\\_";
                     break;
                   case "2028":
-                    str2 += "\\L";
+                    str3 += "\\L";
                     break;
                   case "2029":
-                    str2 += "\\P";
+                    str3 += "\\P";
                     break;
                   default:
-                    code.substr(0, 2) === "00" ? str2 += "\\x" + code.substr(2) : str2 += json.substr(i, 6);
+                    code.substr(0, 2) === "00" ? str3 += "\\x" + code.substr(2) : str3 += json.substr(i, 6);
                 }
                 i += 5, start = i + 1;
               }
@@ -944,18 +944,18 @@ var require_stringifyString = __commonJS({
               if (implicitKey || json[i + 2] === '"' || json.length < minMultiLineLength)
                 i += 1;
               else {
-                for (str2 += json.slice(start, i) + `
+                for (str3 += json.slice(start, i) + `
 
 `; json[i + 2] === "\\" && json[i + 3] === "n" && json[i + 4] !== '"'; )
-                  str2 += `
+                  str3 += `
 `, i += 2;
-                str2 += indent, json[i + 2] === " " && (str2 += "\\"), i += 1, start = i + 1;
+                str3 += indent, json[i + 2] === " " && (str3 += "\\"), i += 1, start = i + 1;
               }
               break;
             default:
               i += 1;
           }
-      return str2 = start ? str2 + json.slice(start) : json, implicitKey ? str2 : foldFlowLines.foldFlowLines(str2, indent, foldFlowLines.FOLD_QUOTED, getFoldOptions(ctx, !1));
+      return str3 = start ? str3 + json.slice(start) : json, implicitKey ? str3 : foldFlowLines.foldFlowLines(str3, indent, foldFlowLines.FOLD_QUOTED, getFoldOptions(ctx, !1));
     }
     function singleQuotedString(value, ctx) {
       if (ctx.options.singleQuote === !1 || ctx.implicitKey && value.includes(`
@@ -1049,14 +1049,14 @@ ${indent}${start}${value}${end}`;
         if (implicitKey && indent === indentStep)
           return quotedString(value, ctx);
       }
-      let str2 = value.replace(/\n+/g, `$&
+      let str3 = value.replace(/\n+/g, `$&
 ${indent}`);
       if (actualString) {
-        let test = (tag) => tag.default && tag.tag !== "tag:yaml.org,2002:str" && tag.test?.test(str2), { compat, tags } = ctx.doc.schema;
+        let test = (tag) => tag.default && tag.tag !== "tag:yaml.org,2002:str" && tag.test?.test(str3), { compat, tags } = ctx.doc.schema;
         if (tags.some(test) || compat?.some(test))
           return quotedString(value, ctx);
       }
-      return implicitKey ? str2 : foldFlowLines.foldFlowLines(str2, indent, foldFlowLines.FOLD_FLOW, getFoldOptions(ctx, !1));
+      return implicitKey ? str3 : foldFlowLines.foldFlowLines(str3, indent, foldFlowLines.FOLD_FLOW, getFoldOptions(ctx, !1));
     }
     function stringifyString(item, ctx, onComment, onChompKeep) {
       let { implicitKey, inFlow } = ctx, ss = typeof item.value == "string" ? item : Object.assign({}, item, { value: String(item.value) }), { type } = item;
@@ -1178,9 +1178,9 @@ var require_stringify = __commonJS({
       tagObj ?? (tagObj = getTagObject(ctx.doc.schema.tags, node));
       let props = stringifyProps(node, tagObj, ctx);
       props.length > 0 && (ctx.indentAtStart = (ctx.indentAtStart ?? 0) + props.length + 1);
-      let str2 = typeof tagObj.stringify == "function" ? tagObj.stringify(node, ctx, onComment, onChompKeep) : identity.isScalar(node) ? stringifyString.stringifyString(node, ctx, onComment, onChompKeep) : node.toString(ctx, onComment, onChompKeep);
-      return props ? identity.isScalar(node) || str2[0] === "{" || str2[0] === "[" ? `${props} ${str2}` : `${props}
-${ctx.indent}${str2}` : str2;
+      let str3 = typeof tagObj.stringify == "function" ? tagObj.stringify(node, ctx, onComment, onChompKeep) : identity.isScalar(node) ? stringifyString.stringifyString(node, ctx, onComment, onChompKeep) : node.toString(ctx, onComment, onChompKeep);
+      return props ? identity.isScalar(node) || str3[0] === "{" || str3[0] === "[" ? `${props} ${str3}` : `${props}
+${ctx.indent}${str3}` : str3;
     }
     exports2.createStringifyContext = createStringifyContext;
     exports2.stringify = stringify2;
@@ -1208,21 +1208,21 @@ var require_stringifyPair = __commonJS({
         implicitKey: !explicitKey && (simpleKeys || !allNullValues),
         indent: indent + indentStep
       });
-      let keyCommentDone = !1, chompKeep = !1, str2 = stringify2.stringify(key, ctx, () => keyCommentDone = !0, () => chompKeep = !0);
-      if (!explicitKey && !ctx.inFlow && str2.length > 1024) {
+      let keyCommentDone = !1, chompKeep = !1, str3 = stringify2.stringify(key, ctx, () => keyCommentDone = !0, () => chompKeep = !0);
+      if (!explicitKey && !ctx.inFlow && str3.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
         explicitKey = !0;
       }
       if (ctx.inFlow) {
         if (allNullValues || value == null)
-          return keyCommentDone && onComment && onComment(), str2 === "" ? "?" : explicitKey ? `? ${str2}` : str2;
+          return keyCommentDone && onComment && onComment(), str3 === "" ? "?" : explicitKey ? `? ${str3}` : str3;
       } else if (allNullValues && !simpleKeys || value == null && explicitKey)
-        return str2 = `? ${str2}`, keyComment && !keyCommentDone ? str2 += stringifyComment.lineComment(str2, ctx.indent, commentString(keyComment)) : chompKeep && onChompKeep && onChompKeep(), str2;
-      keyCommentDone && (keyComment = null), explicitKey ? (keyComment && (str2 += stringifyComment.lineComment(str2, ctx.indent, commentString(keyComment))), str2 = `? ${str2}
-${indent}:`) : (str2 = `${str2}:`, keyComment && (str2 += stringifyComment.lineComment(str2, ctx.indent, commentString(keyComment))));
+        return str3 = `? ${str3}`, keyComment && !keyCommentDone ? str3 += stringifyComment.lineComment(str3, ctx.indent, commentString(keyComment)) : chompKeep && onChompKeep && onChompKeep(), str3;
+      keyCommentDone && (keyComment = null), explicitKey ? (keyComment && (str3 += stringifyComment.lineComment(str3, ctx.indent, commentString(keyComment))), str3 = `? ${str3}
+${indent}:`) : (str3 = `${str3}:`, keyComment && (str3 += stringifyComment.lineComment(str3, ctx.indent, commentString(keyComment))));
       let vsb, vcb, valueComment;
-      identity.isNode(value) ? (vsb = !!value.spaceBefore, vcb = value.commentBefore, valueComment = value.comment) : (vsb = !1, vcb = null, valueComment = null, value && typeof value == "object" && (value = doc.createNode(value))), ctx.implicitKey = !1, !explicitKey && !keyComment && identity.isScalar(value) && (ctx.indentAtStart = str2.length + 1), chompKeep = !1, !indentSeq && indentStep.length >= 2 && !ctx.inFlow && !explicitKey && identity.isSeq(value) && !value.flow && !value.tag && !value.anchor && (ctx.indent = ctx.indent.substring(2));
+      identity.isNode(value) ? (vsb = !!value.spaceBefore, vcb = value.commentBefore, valueComment = value.comment) : (vsb = !1, vcb = null, valueComment = null, value && typeof value == "object" && (value = doc.createNode(value))), ctx.implicitKey = !1, !explicitKey && !keyComment && identity.isScalar(value) && (ctx.indentAtStart = str3.length + 1), chompKeep = !1, !indentSeq && indentStep.length >= 2 && !ctx.inFlow && !explicitKey && identity.isSeq(value) && !value.flow && !value.tag && !value.anchor && (ctx.indent = ctx.indent.substring(2));
       let valueCommentDone = !1, valueStr = stringify2.stringify(value, ctx, () => valueCommentDone = !0, () => chompKeep = !0), ws = " ";
       if (keyComment || vsb || vcb) {
         if (ws = vsb ? `
@@ -1250,7 +1250,7 @@ ${ctx.indent}`);
         }
       } else (valueStr === "" || valueStr[0] === `
 `) && (ws = "");
-      return str2 += ws + valueStr, ctx.inFlow ? valueCommentDone && onComment && onComment() : valueComment && !valueCommentDone ? str2 += stringifyComment.lineComment(str2, ctx.indent, commentString(valueComment)) : chompKeep && onChompKeep && onChompKeep(), str2;
+      return str3 += ws + valueStr, ctx.inFlow ? valueCommentDone && onComment && onComment() : valueComment && !valueCommentDone ? str3 += stringifyComment.lineComment(str3, ctx.indent, commentString(valueComment)) : chompKeep && onChompKeep && onChompKeep(), str3;
     }
     exports2.stringifyPair = stringifyPair;
   }
@@ -1421,23 +1421,23 @@ var require_stringifyCollection = __commonJS({
           ik && (!chompKeep && ik.spaceBefore && lines.push(""), addCommentBefore(ctx, lines, ik.commentBefore, chompKeep));
         }
         chompKeep = !1;
-        let str3 = stringify2.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = !0);
-        comment2 && (str3 += stringifyComment.lineComment(str3, itemIndent, commentString(comment2))), chompKeep && comment2 && (chompKeep = !1), lines.push(blockItemPrefix + str3);
+        let str4 = stringify2.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = !0);
+        comment2 && (str4 += stringifyComment.lineComment(str4, itemIndent, commentString(comment2))), chompKeep && comment2 && (chompKeep = !1), lines.push(blockItemPrefix + str4);
       }
-      let str2;
+      let str3;
       if (lines.length === 0)
-        str2 = flowChars.start + flowChars.end;
+        str3 = flowChars.start + flowChars.end;
       else {
-        str2 = lines[0];
+        str3 = lines[0];
         for (let i = 1; i < lines.length; ++i) {
           let line = lines[i];
-          str2 += line ? `
+          str3 += line ? `
 ${indent}${line}` : `
 `;
         }
       }
-      return comment ? (str2 += `
-` + stringifyComment.indentComment(commentString(comment), indent), onComment && onComment()) : chompKeep && onChompKeep && onChompKeep(), str2;
+      return comment ? (str3 += `
+` + stringifyComment.indentComment(commentString(comment), indent), onComment && onComment()) : chompKeep && onChompKeep && onChompKeep(), str3;
     }
     function stringifyFlowCollection({ items }, ctx, { flowChars, itemIndent }) {
       let { indent, indentStep, flowCollectionPadding: fcPadding, options: { commentString } } = ctx;
@@ -1458,9 +1458,9 @@ ${indent}${line}` : `
           iv ? (iv.comment && (comment = iv.comment), iv.commentBefore && (reqNewline = !0)) : item.value == null && ik?.comment && (comment = ik.comment);
         }
         comment && (reqNewline = !0);
-        let str2 = stringify2.stringify(item, itemCtx, () => comment = null);
-        reqNewline || (reqNewline = lines.length > linesAtValue || str2.includes(`
-`)), i < items.length - 1 ? str2 += "," : ctx.options.trailingComma && (ctx.options.lineWidth > 0 && (reqNewline || (reqNewline = lines.reduce((sum, line) => sum + line.length + 2, 2) + (str2.length + 2) > ctx.options.lineWidth)), reqNewline && (str2 += ",")), comment && (str2 += stringifyComment.lineComment(str2, itemIndent, commentString(comment))), lines.push(str2), linesAtValue = lines.length;
+        let str3 = stringify2.stringify(item, itemCtx, () => comment = null);
+        reqNewline || (reqNewline = lines.length > linesAtValue || str3.includes(`
+`)), i < items.length - 1 ? str3 += "," : ctx.options.trailingComma && (ctx.options.lineWidth > 0 && (reqNewline || (reqNewline = lines.reduce((sum, line) => sum + line.length + 2, 2) + (str3.length + 2) > ctx.options.lineWidth)), reqNewline && (str3 += ",")), comment && (str3 += stringifyComment.lineComment(str3, itemIndent, commentString(comment))), lines.push(str3), linesAtValue = lines.length;
       }
       let { start, end } = flowChars;
       if (lines.length === 0)
@@ -1470,12 +1470,12 @@ ${indent}${line}` : `
         reqNewline = ctx.options.lineWidth > 0 && len > ctx.options.lineWidth;
       }
       if (reqNewline) {
-        let str2 = start;
+        let str3 = start;
         for (let line of lines)
-          str2 += line ? `
+          str3 += line ? `
 ${indentStep}${indent}${line}` : `
 `;
-        return `${str2}
+        return `${str3}
 ${indent}${end}`;
       } else
         return `${start}${fcPadding}${lines.join(" ")}${fcPadding}${end}`;
@@ -1735,7 +1735,7 @@ var require_string = __commonJS({
       identify: (value) => typeof value == "string",
       default: !0,
       tag: "tag:yaml.org,2002:str",
-      resolve: (str2) => str2,
+      resolve: (str3) => str3,
       stringify(item, ctx, onComment, onChompKeep) {
         return ctx = Object.assign({ actualString: !0 }, ctx), stringifyString.stringifyString(item, ctx, onComment, onChompKeep);
       }
@@ -1770,7 +1770,7 @@ var require_bool = __commonJS({
       default: !0,
       tag: "tag:yaml.org,2002:bool",
       test: /^(?:[Tt]rue|TRUE|[Ff]alse|FALSE)$/,
-      resolve: (str2) => new Scalar.Scalar(str2[0] === "t" || str2[0] === "T"),
+      resolve: (str3) => new Scalar.Scalar(str3[0] === "t" || str3[0] === "T"),
       stringify({ source, value }, ctx) {
         if (source && boolTag.test.test(source)) {
           let sv = source[0] === "t" || source[0] === "T";
@@ -1817,7 +1817,7 @@ var require_float = __commonJS({
       default: !0,
       tag: "tag:yaml.org,2002:float",
       test: /^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN)$/,
-      resolve: (str2) => str2.slice(-3).toLowerCase() === "nan" ? NaN : str2[0] === "-" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
+      resolve: (str3) => str3.slice(-3).toLowerCase() === "nan" ? NaN : str3[0] === "-" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
       stringify: stringifyNumber.stringifyNumber
     }, floatExp = {
       identify: (value) => typeof value == "number",
@@ -1825,7 +1825,7 @@ var require_float = __commonJS({
       tag: "tag:yaml.org,2002:float",
       format: "EXP",
       test: /^[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+$/,
-      resolve: (str2) => parseFloat(str2),
+      resolve: (str3) => parseFloat(str3),
       stringify(node) {
         let num = Number(node.value);
         return isFinite(num) ? num.toExponential() : stringifyNumber.stringifyNumber(node);
@@ -1835,9 +1835,9 @@ var require_float = __commonJS({
       default: !0,
       tag: "tag:yaml.org,2002:float",
       test: /^[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*)$/,
-      resolve(str2) {
-        let node = new Scalar.Scalar(parseFloat(str2)), dot = str2.indexOf(".");
-        return dot !== -1 && str2[str2.length - 1] === "0" && (node.minFractionDigits = str2.length - dot - 1), node;
+      resolve(str3) {
+        let node = new Scalar.Scalar(parseFloat(str3)), dot = str3.indexOf(".");
+        return dot !== -1 && str3[str3.length - 1] === "0" && (node.minFractionDigits = str3.length - dot - 1), node;
       },
       stringify: stringifyNumber.stringifyNumber
     };
@@ -1851,7 +1851,7 @@ var require_float = __commonJS({
 var require_int = __commonJS({
   "node_modules/yaml/dist/schema/core/int.js"(exports2) {
     "use strict";
-    var stringifyNumber = require_stringifyNumber(), intIdentify = (value) => typeof value == "bigint" || Number.isInteger(value), intResolve = (str2, offset, radix, { intAsBigInt }) => intAsBigInt ? BigInt(str2) : parseInt(str2.substring(offset), radix);
+    var stringifyNumber = require_stringifyNumber(), intIdentify = (value) => typeof value == "bigint" || Number.isInteger(value), intResolve = (str3, offset, radix, { intAsBigInt }) => intAsBigInt ? BigInt(str3) : parseInt(str3.substring(offset), radix);
     function intStringify(node, radix, prefix) {
       let { value } = node;
       return intIdentify(value) && value >= 0 ? prefix + value.toString(radix) : stringifyNumber.stringifyNumber(node);
@@ -1862,14 +1862,14 @@ var require_int = __commonJS({
       tag: "tag:yaml.org,2002:int",
       format: "OCT",
       test: /^0o[0-7]+$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 2, 8, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 2, 8, opt),
       stringify: (node) => intStringify(node, 8, "0o")
     }, int = {
       identify: intIdentify,
       default: !0,
       tag: "tag:yaml.org,2002:int",
       test: /^[-+]?[0-9]+$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 0, 10, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 0, 10, opt),
       stringify: stringifyNumber.stringifyNumber
     }, intHex = {
       identify: (value) => intIdentify(value) && value >= 0,
@@ -1877,7 +1877,7 @@ var require_int = __commonJS({
       tag: "tag:yaml.org,2002:int",
       format: "HEX",
       test: /^0x[0-9a-fA-F]+$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 2, 16, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 2, 16, opt),
       stringify: (node) => intStringify(node, 16, "0x")
     };
     exports2.int = int;
@@ -1920,7 +1920,7 @@ var require_schema2 = __commonJS({
         identify: (value) => typeof value == "string",
         default: !0,
         tag: "tag:yaml.org,2002:str",
-        resolve: (str2) => str2,
+        resolve: (str3) => str3,
         stringify: stringifyJSON
       },
       {
@@ -1937,7 +1937,7 @@ var require_schema2 = __commonJS({
         default: !0,
         tag: "tag:yaml.org,2002:bool",
         test: /^true$|^false$/,
-        resolve: (str2) => str2 === "true",
+        resolve: (str3) => str3 === "true",
         stringify: stringifyJSON
       },
       {
@@ -1945,7 +1945,7 @@ var require_schema2 = __commonJS({
         default: !0,
         tag: "tag:yaml.org,2002:int",
         test: /^-?(?:0|[1-9][0-9]*)$/,
-        resolve: (str2, _onError, { intAsBigInt }) => intAsBigInt ? BigInt(str2) : parseInt(str2, 10),
+        resolve: (str3, _onError, { intAsBigInt }) => intAsBigInt ? BigInt(str3) : parseInt(str3, 10),
         stringify: ({ value }) => intIdentify(value) ? value.toString() : JSON.stringify(value)
       },
       {
@@ -1953,15 +1953,15 @@ var require_schema2 = __commonJS({
         default: !0,
         tag: "tag:yaml.org,2002:float",
         test: /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*)?(?:[eE][-+]?[0-9]+)?$/,
-        resolve: (str2) => parseFloat(str2),
+        resolve: (str3) => parseFloat(str3),
         stringify: stringifyJSON
       }
     ], jsonError = {
       default: !0,
       tag: "",
       test: /^/,
-      resolve(str2, onError) {
-        return onError(`Unresolved plain scalar ${JSON.stringify(str2)}`), str2;
+      resolve(str3, onError) {
+        return onError(`Unresolved plain scalar ${JSON.stringify(str3)}`), str3;
       }
     }, schema = [map.map, seq.seq].concat(jsonScalars, jsonError);
     exports2.schema = schema;
@@ -1989,9 +1989,9 @@ var require_binary = __commonJS({
         if (typeof node_buffer.Buffer == "function")
           return node_buffer.Buffer.from(src, "base64");
         if (typeof atob == "function") {
-          let str2 = atob(src.replace(/[\n\r]/g, "")), buffer = new Uint8Array(str2.length);
-          for (let i = 0; i < str2.length; ++i)
-            buffer[i] = str2.charCodeAt(i);
+          let str3 = atob(src.replace(/[\n\r]/g, "")), buffer = new Uint8Array(str3.length);
+          for (let i = 0; i < str3.length; ++i)
+            buffer[i] = str3.charCodeAt(i);
           return buffer;
         } else
           return onError("This environment does not support reading binary tags; either Buffer or atob is required"), src;
@@ -1999,24 +1999,24 @@ var require_binary = __commonJS({
       stringify({ comment, type, value }, ctx, onComment, onChompKeep) {
         if (!value)
           return "";
-        let buf = value, str2;
+        let buf = value, str3;
         if (typeof node_buffer.Buffer == "function")
-          str2 = buf instanceof node_buffer.Buffer ? buf.toString("base64") : node_buffer.Buffer.from(buf.buffer).toString("base64");
+          str3 = buf instanceof node_buffer.Buffer ? buf.toString("base64") : node_buffer.Buffer.from(buf.buffer).toString("base64");
         else if (typeof btoa == "function") {
           let s = "";
           for (let i = 0; i < buf.length; ++i)
             s += String.fromCharCode(buf[i]);
-          str2 = btoa(s);
+          str3 = btoa(s);
         } else
           throw new Error("This environment does not support writing binary tags; either Buffer or btoa is required");
         if (type ?? (type = Scalar.Scalar.BLOCK_LITERAL), type !== Scalar.Scalar.QUOTE_DOUBLE) {
-          let lineWidth = Math.max(ctx.options.lineWidth - ctx.indent.length, ctx.options.minContentWidth), n = Math.ceil(str2.length / lineWidth), lines = new Array(n);
+          let lineWidth = Math.max(ctx.options.lineWidth - ctx.indent.length, ctx.options.minContentWidth), n = Math.ceil(str3.length / lineWidth), lines = new Array(n);
           for (let i = 0, o = 0; i < n; ++i, o += lineWidth)
-            lines[i] = str2.substr(o, lineWidth);
-          str2 = lines.join(type === Scalar.Scalar.BLOCK_LITERAL ? `
+            lines[i] = str3.substr(o, lineWidth);
+          str3 = lines.join(type === Scalar.Scalar.BLOCK_LITERAL ? `
 ` : " ");
         }
-        return stringifyString.stringifyString({ comment, type, value: str2 }, ctx, onComment, onChompKeep);
+        return stringifyString.stringifyString({ comment, type, value: str3 }, ctx, onComment, onChompKeep);
       }
     };
     exports2.binary = binary;
@@ -2176,7 +2176,7 @@ var require_float2 = __commonJS({
       default: !0,
       tag: "tag:yaml.org,2002:float",
       test: /^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN)$/,
-      resolve: (str2) => str2.slice(-3).toLowerCase() === "nan" ? NaN : str2[0] === "-" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
+      resolve: (str3) => str3.slice(-3).toLowerCase() === "nan" ? NaN : str3[0] === "-" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
       stringify: stringifyNumber.stringifyNumber
     }, floatExp = {
       identify: (value) => typeof value == "number",
@@ -2184,7 +2184,7 @@ var require_float2 = __commonJS({
       tag: "tag:yaml.org,2002:float",
       format: "EXP",
       test: /^[-+]?(?:[0-9][0-9_]*)?(?:\.[0-9_]*)?[eE][-+]?[0-9]+$/,
-      resolve: (str2) => parseFloat(str2.replace(/_/g, "")),
+      resolve: (str3) => parseFloat(str3.replace(/_/g, "")),
       stringify(node) {
         let num = Number(node.value);
         return isFinite(num) ? num.toExponential() : stringifyNumber.stringifyNumber(node);
@@ -2194,10 +2194,10 @@ var require_float2 = __commonJS({
       default: !0,
       tag: "tag:yaml.org,2002:float",
       test: /^[-+]?(?:[0-9][0-9_]*)?\.[0-9_]*$/,
-      resolve(str2) {
-        let node = new Scalar.Scalar(parseFloat(str2.replace(/_/g, ""))), dot = str2.indexOf(".");
+      resolve(str3) {
+        let node = new Scalar.Scalar(parseFloat(str3.replace(/_/g, ""))), dot = str3.indexOf(".");
         if (dot !== -1) {
-          let f = str2.substring(dot + 1).replace(/_/g, "");
+          let f = str3.substring(dot + 1).replace(/_/g, "");
           f[f.length - 1] === "0" && (node.minFractionDigits = f.length);
         }
         return node;
@@ -2215,31 +2215,31 @@ var require_int2 = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/int.js"(exports2) {
     "use strict";
     var stringifyNumber = require_stringifyNumber(), intIdentify = (value) => typeof value == "bigint" || Number.isInteger(value);
-    function intResolve(str2, offset, radix, { intAsBigInt }) {
-      let sign = str2[0];
-      if ((sign === "-" || sign === "+") && (offset += 1), str2 = str2.substring(offset).replace(/_/g, ""), intAsBigInt) {
+    function intResolve(str3, offset, radix, { intAsBigInt }) {
+      let sign = str3[0];
+      if ((sign === "-" || sign === "+") && (offset += 1), str3 = str3.substring(offset).replace(/_/g, ""), intAsBigInt) {
         switch (radix) {
           case 2:
-            str2 = `0b${str2}`;
+            str3 = `0b${str3}`;
             break;
           case 8:
-            str2 = `0o${str2}`;
+            str3 = `0o${str3}`;
             break;
           case 16:
-            str2 = `0x${str2}`;
+            str3 = `0x${str3}`;
             break;
         }
-        let n2 = BigInt(str2);
+        let n2 = BigInt(str3);
         return sign === "-" ? BigInt(-1) * n2 : n2;
       }
-      let n = parseInt(str2, radix);
+      let n = parseInt(str3, radix);
       return sign === "-" ? -1 * n : n;
     }
     function intStringify(node, radix, prefix) {
       let { value } = node;
       if (intIdentify(value)) {
-        let str2 = value.toString(radix);
-        return value < 0 ? "-" + prefix + str2.substr(1) : prefix + str2;
+        let str3 = value.toString(radix);
+        return value < 0 ? "-" + prefix + str3.substr(1) : prefix + str3;
       }
       return stringifyNumber.stringifyNumber(node);
     }
@@ -2249,7 +2249,7 @@ var require_int2 = __commonJS({
       tag: "tag:yaml.org,2002:int",
       format: "BIN",
       test: /^[-+]?0b[0-1_]+$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 2, 2, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 2, 2, opt),
       stringify: (node) => intStringify(node, 2, "0b")
     }, intOct = {
       identify: intIdentify,
@@ -2257,14 +2257,14 @@ var require_int2 = __commonJS({
       tag: "tag:yaml.org,2002:int",
       format: "OCT",
       test: /^[-+]?0[0-7_]+$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 1, 8, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 1, 8, opt),
       stringify: (node) => intStringify(node, 8, "0")
     }, int = {
       identify: intIdentify,
       default: !0,
       tag: "tag:yaml.org,2002:int",
       test: /^[-+]?[0-9][0-9_]*$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 0, 10, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 0, 10, opt),
       stringify: stringifyNumber.stringifyNumber
     }, intHex = {
       identify: intIdentify,
@@ -2272,7 +2272,7 @@ var require_int2 = __commonJS({
       tag: "tag:yaml.org,2002:int",
       format: "HEX",
       test: /^[-+]?0x[0-9a-fA-F_]+$/,
-      resolve: (str2, _onError, opt) => intResolve(str2, 2, 16, opt),
+      resolve: (str3, _onError, opt) => intResolve(str3, 2, 16, opt),
       stringify: (node) => intStringify(node, 16, "0x")
     };
     exports2.int = int;
@@ -2354,8 +2354,8 @@ var require_timestamp = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/timestamp.js"(exports2) {
     "use strict";
     var stringifyNumber = require_stringifyNumber();
-    function parseSexagesimal(str2, asBigInt) {
-      let sign = str2[0], parts = sign === "-" || sign === "+" ? str2.substring(1) : str2, num = (n) => asBigInt ? BigInt(n) : Number(n), res = parts.replace(/_/g, "").split(":").reduce((res2, p) => res2 * num(60) + num(p), num(0));
+    function parseSexagesimal(str3, asBigInt) {
+      let sign = str3[0], parts = sign === "-" || sign === "+" ? str3.substring(1) : str3, num = (n) => asBigInt ? BigInt(n) : Number(n), res = parts.replace(/_/g, "").split(":").reduce((res2, p) => res2 * num(60) + num(p), num(0));
       return sign === "-" ? num(-1) * res : res;
     }
     function stringifySexagesimal(node) {
@@ -2375,7 +2375,7 @@ var require_timestamp = __commonJS({
       tag: "tag:yaml.org,2002:int",
       format: "TIME",
       test: /^[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+$/,
-      resolve: (str2, _onError, { intAsBigInt }) => parseSexagesimal(str2, intAsBigInt),
+      resolve: (str3, _onError, { intAsBigInt }) => parseSexagesimal(str3, intAsBigInt),
       stringify: stringifySexagesimal
     }, floatTime = {
       identify: (value) => typeof value == "number",
@@ -2383,7 +2383,7 @@ var require_timestamp = __commonJS({
       tag: "tag:yaml.org,2002:float",
       format: "TIME",
       test: /^[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*$/,
-      resolve: (str2) => parseSexagesimal(str2, !1),
+      resolve: (str3) => parseSexagesimal(str3, !1),
       stringify: stringifySexagesimal
     }, timestamp = {
       identify: (value) => value instanceof Date,
@@ -2393,8 +2393,8 @@ var require_timestamp = __commonJS({
       // may be omitted altogether, resulting in a date format. In such a case, the time part is
       // assumed to be 00:00:00Z (start of day, UTC).
       test: RegExp("^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})(?:(?:t|T|[ \\t]+)([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2}(\\.[0-9]+)?)(?:[ \\t]*(Z|[-+][012]?[0-9](?::[0-9]{2})?))?)?$"),
-      resolve(str2) {
-        let match = str2.match(timestamp.test);
+      resolve(str3) {
+        let match = str3.match(timestamp.test);
         if (!match)
           throw new Error("!!timestamp expects a date, starting with yyyy-mm-dd");
         let [, year, month, day, hour, minute, second] = match.map(Number), millisec = match[7] ? Number((match[7] + "00").substr(1, 3)) : 0, date = Date.UTC(year, month - 1, day, hour || 0, minute || 0, second || 0, millisec), tz = match[8];
@@ -2616,8 +2616,8 @@ var require_Document = __commonJS({
         assertCollection(this.contents) && this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path8, value) {
-        assertCollection(this.contents) && this.contents.addIn(path8, value);
+      addIn(path9, value) {
+        assertCollection(this.contents) && this.contents.addIn(path9, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -2678,8 +2678,8 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path8) {
-        return Collection.isEmptyPath(path8) ? this.contents == null ? !1 : (this.contents = null, !0) : assertCollection(this.contents) ? this.contents.deleteIn(path8) : !1;
+      deleteIn(path9) {
+        return Collection.isEmptyPath(path9) ? this.contents == null ? !1 : (this.contents = null, !0) : assertCollection(this.contents) ? this.contents.deleteIn(path9) : !1;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -2694,8 +2694,8 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path8, keepScalar) {
-        return Collection.isEmptyPath(path8) ? !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents : identity.isCollection(this.contents) ? this.contents.getIn(path8, keepScalar) : void 0;
+      getIn(path9, keepScalar) {
+        return Collection.isEmptyPath(path9) ? !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents : identity.isCollection(this.contents) ? this.contents.getIn(path9, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -2706,8 +2706,8 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path8) {
-        return Collection.isEmptyPath(path8) ? this.contents !== void 0 : identity.isCollection(this.contents) ? this.contents.hasIn(path8) : !1;
+      hasIn(path9) {
+        return Collection.isEmptyPath(path9) ? this.contents !== void 0 : identity.isCollection(this.contents) ? this.contents.hasIn(path9) : !1;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -2720,8 +2720,8 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path8, value) {
-        Collection.isEmptyPath(path8) ? this.contents = value : this.contents == null ? this.contents = Collection.collectionFromPath(this.schema, Array.from(path8), value) : assertCollection(this.contents) && this.contents.setIn(path8, value);
+      setIn(path9, value) {
+        Collection.isEmptyPath(path9) ? this.contents = value : this.contents == null ? this.contents = Collection.collectionFromPath(this.schema, Array.from(path9), value) : assertCollection(this.contents) && this.contents.setIn(path9, value);
       }
       /**
        * Change the YAML version and schema used by the document.
@@ -3477,8 +3477,8 @@ var require_resolve_flow_scalar = __commonJS({
 `))
           if (ch === `
 `) {
-            let { fold: fold2, offset } = foldNewline(source, i);
-            res += fold2, i = offset;
+            let { fold, offset } = foldNewline(source, i);
+            res += fold, i = offset;
           } else if (ch === "\\") {
             let next = source[++i], cc = escapeCodes[next];
             if (cc)
@@ -3511,14 +3511,14 @@ var require_resolve_flow_scalar = __commonJS({
       return (source[source.length - 1] !== '"' || source.length === 1) && onError(source.length, "MISSING_CHAR", 'Missing closing "quote'), res;
     }
     function foldNewline(source, offset) {
-      let fold2 = "", ch = source[offset + 1];
+      let fold = "", ch = source[offset + 1];
       for (; (ch === " " || ch === "	" || ch === `
 ` || ch === "\r") && !(ch === "\r" && source[offset + 2] !== `
 `); )
         ch === `
-` && (fold2 += `
+` && (fold += `
 `), offset += 1, ch = source[offset + 1];
-      return fold2 || (fold2 = " "), { fold: fold2, offset };
+      return fold || (fold = " "), { fold, offset };
     }
     var escapeCodes = {
       0: "\0",
@@ -4116,9 +4116,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path8) => {
+    visit.itemAtPath = (cst, path9) => {
       let item = cst;
-      for (let [field, index] of path8) {
+      for (let [field, index] of path9) {
         let tok = item?.[field];
         if (tok && "items" in tok)
           item = tok.items[index];
@@ -4127,21 +4127,21 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path8) => {
-      let parent = visit.itemAtPath(cst, path8.slice(0, -1)), field = path8[path8.length - 1][0], coll = parent?.[field];
+    visit.parentCollection = (cst, path9) => {
+      let parent = visit.itemAtPath(cst, path9.slice(0, -1)), field = path9[path9.length - 1][0], coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path8, item, visitor) {
-      let ctrl = visitor(item, path8);
+    function _visit(path9, item, visitor) {
+      let ctrl = visitor(item, path9);
       if (typeof ctrl == "symbol")
         return ctrl;
       for (let field of ["key", "value"]) {
         let token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            let ci = _visit(Object.freeze(path8.concat([[field, i]])), token.items[i], visitor);
+            let ci = _visit(Object.freeze(path9.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci == "number")
               i = ci - 1;
             else {
@@ -4150,10 +4150,10 @@ var require_cst_visit = __commonJS({
               ci === REMOVE && (token.items.splice(i, 1), i -= 1);
             }
           }
-          typeof ctrl == "function" && field === "key" && (ctrl = ctrl(item, path8));
+          typeof ctrl == "function" && field === "key" && (ctrl = ctrl(item, path9));
         }
       }
-      return typeof ctrl == "function" ? ctrl(item, path8) : ctrl;
+      return typeof ctrl == "function" ? ctrl(item, path9) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -5486,7 +5486,7 @@ __export(cli_exports, {
   main: () => main
 });
 module.exports = __toCommonJS(cli_exports);
-var import_node_fs4 = __toESM(require("node:fs"), 1), import_node_path7 = __toESM(require("node:path"), 1), import_node_child_process = require("node:child_process");
+var import_node_fs4 = __toESM(require("node:fs"), 1), import_node_path8 = __toESM(require("node:path"), 1), import_node_child_process = require("node:child_process");
 
 // src/audit.ts
 var import_node_fs2 = __toESM(require("node:fs"), 1), import_node_path4 = __toESM(require("node:path"), 1);
@@ -5495,7 +5495,7 @@ var import_node_fs2 = __toESM(require("node:fs"), 1), import_node_path4 = __toES
 var import_node_os2 = __toESM(require("node:os"), 1), import_node_path2 = __toESM(require("node:path"), 1);
 
 // src/patterns.ts
-var import_node_os = __toESM(require("node:os"), 1), import_node_path = __toESM(require("node:path"), 1), CASE_INSENSITIVE = process.platform === "darwin" || process.platform === "win32", fold = (s) => CASE_INSENSITIVE ? s.toLowerCase() : s, PATH_FLAGS = CASE_INSENSITIVE ? "i" : "", cache = /* @__PURE__ */ new Map();
+var import_node_os = __toESM(require("node:os"), 1), import_node_path = __toESM(require("node:path"), 1), CASE_INSENSITIVE = process.platform === "darwin" || process.platform === "win32", cache = /* @__PURE__ */ new Map();
 function escapeRe(s) {
   return s.replace(/[.+^${}()|[\]\\]/g, "\\$&");
 }
@@ -5563,30 +5563,38 @@ function pathGlobSource(glob) {
   }
   return src;
 }
-function expandHome(p) {
-  return p === "~" || p === "$HOME" || p === "${HOME}" ? import_node_os.default.homedir() : p.startsWith("~/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(2)) : p.startsWith("$HOME/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(6)) : p.startsWith("${HOME}/") ? import_node_path.default.join(import_node_os.default.homedir(), p.slice(8)) : p;
+var HOST = {
+  path: import_node_path.default,
+  get home() {
+    return import_node_os.default.homedir();
+  },
+  caseInsensitive: CASE_INSENSITIVE
+}, isWindows = (pf) => pf.path.sep === "\\", DRIVE = /^[a-zA-Z]:/, toPosix = (p, pf) => isWindows(pf) ? p.replace(/\\/g, "/") : p;
+function expandHome(p, pf = HOST) {
+  return p === "~" || p === "$HOME" || p === "${HOME}" ? pf.home : p.startsWith("~/") ? pf.path.join(pf.home, p.slice(2)) : p.startsWith("$HOME/") ? pf.path.join(pf.home, p.slice(6)) : p.startsWith("${HOME}/") ? pf.path.join(pf.home, p.slice(8)) : p;
 }
-var toPosix = (p) => p.split(import_node_path.default.sep).join("/");
 function resolvePath(p, ctx) {
-  return toPosix(import_node_path.default.resolve(ctx.cwd, expandHome(p)));
+  let pf = ctx.platform ?? HOST, target = expandHome(p, pf);
+  return isWindows(pf) && (target = target.replace(/^\/([a-zA-Z])\//, "$1:/")), toPosix(pf.path.resolve(ctx.cwd, target), pf);
 }
-function isInside(abs, root) {
-  let rel = import_node_path.default.relative(fold(root), fold(abs));
-  return rel === "" || !rel.startsWith("..") && !import_node_path.default.isAbsolute(rel);
+function isInside(abs, root, pf = HOST) {
+  let lower = (s) => pf.caseInsensitive ? s.toLowerCase() : s, rel = pf.path.relative(lower(root), lower(abs));
+  return rel === "" || !rel.startsWith("..") && !pf.path.isAbsolute(rel);
 }
 function pathMatches(p, pattern, ctx) {
-  let abs = resolvePath(p, ctx), lit = regexLiteral(pattern, !0);
+  let pf = ctx.platform ?? HOST, flags = pf.caseInsensitive ? "i" : "", compiled = (kind, glob2) => memo(kind + flags, glob2, () => new RegExp("^" + pathGlobSource(glob2) + "$", flags)), abs = resolvePath(p, ctx), lit = regexLiteral(pattern, !0);
   if (lit) return lit.test(abs);
   let glob = pattern.startsWith("./") ? pattern.slice(2) : pattern;
   if (glob.endsWith("/") && (glob += "**"), !glob.includes("/"))
-    return memo("base", glob, () => new RegExp("^" + pathGlobSource(glob) + "$", PATH_FLAGS)).test(abs.slice(abs.lastIndexOf("/") + 1));
-  let expanded = toPosix(expandHome(glob));
+    return compiled("base", glob).test(abs.slice(abs.lastIndexOf("/") + 1));
+  let expanded = toPosix(expandHome(glob, pf), pf);
   if (expanded.startsWith("/"))
-    return memo("abs", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$", PATH_FLAGS)).test(abs);
-  let rootAbs = toPosix(import_node_path.default.resolve(ctx.root));
-  if (!isInside(abs, rootAbs)) return !1;
-  let rel = toPosix(import_node_path.default.relative(fold(rootAbs), fold(abs)));
-  return memo("rel", expanded, () => new RegExp("^" + pathGlobSource(expanded) + "$", PATH_FLAGS)).test(rel);
+    return compiled("abs", expanded).test(isWindows(pf) ? abs.replace(DRIVE, "") : abs);
+  if (isWindows(pf) && DRIVE.test(expanded)) return compiled("abs", expanded).test(abs);
+  let rootAbs = toPosix(pf.path.resolve(ctx.root), pf);
+  if (!isInside(abs, rootAbs, pf)) return !1;
+  let lower = (s) => pf.caseInsensitive ? s.toLowerCase() : s, rel = toPosix(pf.path.relative(lower(rootAbs), lower(abs)), pf);
+  return compiled("rel", expanded).test(rel);
 }
 function matchList(values, patterns, test) {
   let positive = patterns.filter((p) => !p.startsWith("!")), negative = patterns.filter((p) => p.startsWith("!")).map((p) => p.slice(1));
@@ -5594,22 +5602,31 @@ function matchList(values, patterns, test) {
 }
 
 // src/shell.ts
-var MAX_DEPTH = 6, SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh", "fish"]), ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/, PREFIX_KEYWORDS = /* @__PURE__ */ new Set(["then", "else", "elif", "do", "if", "while", "until", "!", "{", "time"]), DROP_SEGMENT = /* @__PURE__ */ new Set(["for", "case", "select", "function", "fi", "done", "esac", "}", ";;"]);
-function parseShell(src) {
-  let out = [];
-  return collect(src, 0, out), out;
+var MAX_DEPTH = 6, SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh", "dash", "ksh", "fish"]), ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/, PREFIX_KEYWORDS = /* @__PURE__ */ new Set(["then", "else", "elif", "do", "if", "while", "until", "!", "{"]), DROP_SEGMENT = /* @__PURE__ */ new Set(["for", "case", "select", "function", "fi", "done", "esac", "}", ";;"]);
+function parseScript(src, opts = {}) {
+  let segments = [], scripts = [];
+  literalBackslash = opts.powershell === !0;
+  try {
+    collect(src, 0, segments, scripts);
+  } finally {
+    literalBackslash = !1;
+  }
+  return { segments, scripts };
 }
-function collect(src, depth, out) {
+var literalBackslash = !1, isEscape = (ch) => ch === "\\" && !literalBackslash;
+function collect(src, depth, out, scripts) {
   if (depth > MAX_DEPTH || !src.trim()) return;
+  scripts.push(maskQuoted(src));
   let nested = [];
   for (let raw of tokenize(src, nested)) {
     let seg = normalize(raw);
     if (seg) {
       out.push(seg);
-      for (let inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out);
+      for (let inner of innerScript(seg.argv, raw.stdin)) collect(inner, depth + 1, out, scripts);
+      for (let tail of tailArgvs(seg.argv)) for (let inner of innerScript(tail, [])) collect(inner, depth + 1, out, scripts);
     }
   }
-  for (let n of nested) collect(n, depth + 1, out);
+  for (let n of nested) collect(n, depth + 1, out, scripts);
 }
 function tokenize(src, nested) {
   let segs = [], heredocs = [], words = [], redirects = [], inputRedirects = [], stdin = [], word = "", inWord = !1, quoted = !1, pending = null, heredocStrip = !1, n = src.length, i = 0, endWord = () => {
@@ -5622,7 +5639,7 @@ function tokenize(src, nested) {
   };
   for (; i < n; ) {
     let c2 = src[i];
-    if (c2 === "\\") {
+    if (isEscape(c2)) {
       if (src[i + 1] === `
 `) {
         i += 2;
@@ -5648,7 +5665,7 @@ function tokenize(src, nested) {
     }
     if (c2 === '"') {
       for (inWord = !0, quoted = !0, i++; i < n && src[i] !== '"'; )
-        if (src[i] === "\\" && i + 1 < n && '"\\$`\n'.includes(src[i + 1]))
+        if (isEscape(src[i]) && i + 1 < n && '"\\$`\n'.includes(src[i + 1]))
           src[i + 1] !== `
 ` && (word += src[i + 1]), i += 2;
         else if (src[i] === "$" && src[i + 1] === "(") {
@@ -5738,7 +5755,7 @@ function readParen(src, open) {
   let n = src.length, docs = [], depth = 0, i = open;
   for (; i < n; ) {
     let c2 = src[i];
-    if (c2 === "\\") {
+    if (isEscape(c2)) {
       i += 2;
       continue;
     }
@@ -5748,7 +5765,7 @@ function readParen(src, open) {
       continue;
     }
     if (c2 === '"') {
-      for (i++; i < n && src[i] !== '"'; ) i += src[i] === "\\" ? 2 : 1;
+      for (i++; i < n && src[i] !== '"'; ) i += isEscape(src[i]) ? 2 : 1;
       i++;
       continue;
     }
@@ -5772,6 +5789,56 @@ function readParen(src, open) {
     i++;
   }
   return [src.slice(open + 1), n];
+}
+function maskQuoted(src) {
+  let n = src.length, docs = [], out = "", wordStart = !0, i = 0, substitution = () => {
+    if (src[i] === "`") {
+      let [inner, next] = readBacktick(src, i);
+      out += "`" + maskQuoted(inner) + "`", i = next;
+    } else {
+      let [inner, next] = readParen(src, i + 1);
+      out += "$(" + maskQuoted(inner) + ")", i = next;
+    }
+  };
+  for (; i < n; ) {
+    let c2 = src[i], isSubstitution = c2 === "`" || c2 === "$" && src[i + 1] === "(";
+    if (isEscape(c2))
+      out += src.slice(i, i + 2), i += 2;
+    else if (c2 === "'") {
+      let end = src.indexOf("'", i + 1);
+      out += "''", i = end === -1 ? n : end + 1;
+    } else if (c2 === "$" && src[i + 1] === "'") {
+      let end = i + 2;
+      for (; end < n && src[end] !== "'"; ) end += src[end] === "\\" ? 2 : 1;
+      out += "''", i = end + 1;
+    } else if (c2 === '"') {
+      for (out += '"', i++; i < n && src[i] !== '"'; )
+        isEscape(src[i]) ? i += 2 : src[i] === "`" || src[i] === "$" && src[i + 1] === "(" ? substitution() : i++;
+      out += '"', i++;
+    } else if (isSubstitution)
+      substitution();
+    else if (c2 === "#" && wordStart) {
+      for (; i < n && src[i] !== `
+`; ) i++;
+      continue;
+    } else if (c2 === "<" && src[i + 1] === "<" && src[i + 2] !== "<") {
+      let j = i + 2, strip = src[j] === "-";
+      for (strip && j++; src[j] === " " || src[j] === "	"; ) j++;
+      let m = /^(['"]?)([A-Za-z0-9_.-]+)\1/.exec(src.slice(j));
+      m && docs.push({ delim: m[2], strip });
+      let end = m ? j + m[0].length : i + 2;
+      out += src.slice(i, end), i = end;
+    } else if (c2 === `
+` && docs.length) {
+      out += c2, i = skipHeredocs(src, i + 1, docs), docs.length = 0, wordStart = !0;
+      continue;
+    } else {
+      out += c2, i++, wordStart = /[\s;&|(]/.test(c2);
+      continue;
+    }
+    wordStart = !1;
+  }
+  return out;
 }
 function readBacktick(src, open) {
   let i = open + 1;
@@ -5816,8 +5883,8 @@ function ansiC(body) {
   });
 }
 function basename(word) {
-  let idx = word.lastIndexOf("/");
-  return idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+  let idx = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")), name = idx === -1 || idx === word.length - 1 ? word : word.slice(idx + 1);
+  return name.replace(/\.(?:exe|cmd|bat)$/i, "") || name;
 }
 function commandName(word) {
   return CASE_INSENSITIVE ? basename(word).toLowerCase() : basename(word);
@@ -5830,7 +5897,7 @@ function skipFlags(args, withValue) {
   }
   return args.slice(i);
 }
-var SUDO_VALUE_FLAGS = /* @__PURE__ */ new Set(["-u", "-g", "-h", "-p", "-C", "-U", "-r", "-t", "-D", "--user", "--group"]), ENV_VALUE_FLAGS = /* @__PURE__ */ new Set(["-u", "-C", "-S", "--unset", "--chdir", "--split-string"]), NICE_VALUE_FLAGS = /* @__PURE__ */ new Set(["-n", "--adjustment"]), TIMEOUT_VALUE_FLAGS = /* @__PURE__ */ new Set(["-s", "-k", "--signal", "--kill-after"]), XARGS_VALUE_FLAGS = /* @__PURE__ */ new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--max-args", "--max-procs"]), GIT_VALUE_FLAGS = /* @__PURE__ */ new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"]);
+var SUDO_VALUE_FLAGS = /* @__PURE__ */ new Set(["-u", "-g", "-h", "-p", "-C", "-U", "-r", "-t", "-D", "--user", "--group"]), ENV_VALUE_FLAGS = /* @__PURE__ */ new Set(["-u", "-C", "-S", "--unset", "--chdir", "--split-string"]), NICE_VALUE_FLAGS = /* @__PURE__ */ new Set(["-n", "--adjustment"]), TIMEOUT_VALUE_FLAGS = /* @__PURE__ */ new Set(["-s", "-k", "--signal", "--kill-after"]), XARGS_VALUE_FLAGS = /* @__PURE__ */ new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--max-args", "--max-procs"]), TIME_VALUE_FLAGS = /* @__PURE__ */ new Set(["-o", "-f", "--output", "--format"]), CAFFEINATE_VALUE_FLAGS = /* @__PURE__ */ new Set(["-t", "-w"]), TRACE_VALUE_FLAGS = /* @__PURE__ */ new Set(["-o", "-e", "-p", "-s", "-u", "-E", "-P", "-a", "-I", "-S", "-U", "-X"]), FLOCK_VALUE_FLAGS = /* @__PURE__ */ new Set(["-w", "--timeout", "-E", "--conflict-exit-code"]), ARCH_VALUE_FLAGS = /* @__PURE__ */ new Set(["-e", "-d"]), NO_VALUE_FLAGS = /* @__PURE__ */ new Set(), GIT_VALUE_FLAGS = /* @__PURE__ */ new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"]), PLAIN_WRAPPERS = /* @__PURE__ */ new Set(["command", "builtin", "exec", "nohup", "stdbuf", "unbuffer", "setsid", "chronic"]);
 function stripWrappers(argv) {
   let a = [...argv];
   for (let guard = 0; guard < 32 && a.length; guard++) {
@@ -5841,8 +5908,14 @@ function stripWrappers(argv) {
     let w = commandName(a[0]);
     if (w === "sudo" || w === "doas") a = skipFlags(a.slice(1), SUDO_VALUE_FLAGS);
     else if (w === "env") a = skipFlags(a.slice(1), ENV_VALUE_FLAGS);
-    else if (w === "command" || w === "builtin" || w === "exec" || w === "nohup" || w === "stdbuf" || w === "unbuffer")
-      a = skipFlags(a.slice(1), /* @__PURE__ */ new Set());
+    else if (PLAIN_WRAPPERS.has(w)) a = skipFlags(a.slice(1), NO_VALUE_FLAGS);
+    else if (w === "time") a = skipFlags(a.slice(1), TIME_VALUE_FLAGS);
+    else if (w === "caffeinate") a = skipFlags(a.slice(1), CAFFEINATE_VALUE_FLAGS);
+    else if (w === "strace" || w === "ltrace") a = skipFlags(a.slice(1), TRACE_VALUE_FLAGS);
+    else if (w === "arch" && a.length > 1) a = skipFlags(a.slice(1), ARCH_VALUE_FLAGS);
+    else if (w === "busybox" && a.length > 1) a = a.slice(1);
+    else if (w === "flock")
+      a = skipFlags(a.slice(1), FLOCK_VALUE_FLAGS).slice(1), (a[0] === "-c" || a[0] === "--command") && (a = ["sh", "-c", ...a.slice(1)]);
     else if (w === "nice" || w === "ionice") a = skipFlags(a.slice(1), NICE_VALUE_FLAGS);
     else if (w === "timeout" || w === "gtimeout")
       a = skipFlags(a.slice(1), TIMEOUT_VALUE_FLAGS), a.shift();
@@ -5859,6 +5932,19 @@ function stripGitGlobals(args) {
   }
   return args.slice(i);
 }
+var FREE_TEXT = "<text>", masked = (argv) => argv.map((w) => /\s/.test(w) ? FREE_TEXT : w).join(" "), INERT = /* @__PURE__ */ new Set(["polyfence", "echo", "printf", "man", "which", "type", "whatis", "apropos", "whereis", "grep", "egrep", "fgrep", "rg", "ag"]), SUBCOMMAND_TOOLS = new Set(
+  "git hg svn docker podman kubectl helm npm pnpm yarn bun brew cargo go pip pip3 gem apt apt-get dnf yum gh glab aws gcloud az gsutil terraform tofu".split(" ")
+), MAX_TAILS = 16;
+function tailArgvs(argv) {
+  if (argv.length < 2 || INERT.has(argv[0])) return [];
+  let out = [];
+  for (let i = SUBCOMMAND_TOOLS.has(argv[0]) ? 2 : 1; i < argv.length && out.length < MAX_TAILS && !INERT.has(commandName(argv[i])); i++) {
+    if (argv[i].startsWith("-") || /\s/.test(argv[i]) || !/^[\w./~]/.test(argv[i])) continue;
+    let tail = stripWrappers(argv.slice(i));
+    tail.length && out.push(tail);
+  }
+  return out;
+}
 function normalize(raw) {
   if (raw.words.length && DROP_SEGMENT.has(raw.words[0])) return;
   let argv = stripWrappers(raw.words);
@@ -5868,13 +5954,21 @@ function normalize(raw) {
       rawArgv: raw.words,
       redirects: raw.redirects,
       inputRedirects: raw.inputRedirects,
-      text: argv.join(" ")
+      text: argv.join(" "),
+      matchText: masked(argv),
+      tails: tailArgvs(argv).map(masked)
     };
 }
-var SHELL_VALUE_FLAGS = /* @__PURE__ */ new Set(["--rcfile", "--init-file"]);
+var SHELL_VALUE_FLAGS = /* @__PURE__ */ new Set(["--rcfile", "--init-file"]), WATCH_VALUE_FLAGS = /* @__PURE__ */ new Set(["-n", "--interval", "-q", "--equexit"]), SSH_VALUE_FLAGS = new Set("-b -c -D -E -e -F -I -i -J -L -l -m -O -o -p -Q -R -S -W -w".split(" ")), DASH_C_RUNNERS = /* @__PURE__ */ new Set(["su", "runuser", "npx", "script"]);
 function innerScript(argv, stdin) {
   if (!argv.length) return [];
   if (argv[0] === "eval") return [argv.slice(1).join(" ")];
+  if (argv[0] === "watch") return [skipFlags(argv.slice(1), WATCH_VALUE_FLAGS).join(" ")];
+  if (argv[0] === "ssh") return [skipFlags(argv.slice(1), SSH_VALUE_FLAGS).slice(1).join(" ")];
+  if (DASH_C_RUNNERS.has(argv[0]) || argv[0] === "npm" && argv[1] === "exec") {
+    let at = argv.findIndex((a) => a === "-c" || a === "--command" || a === "--call");
+    return at !== -1 && argv[at + 1] ? [argv[at + 1]] : [];
+  }
   if (!SHELLS.has(argv[0])) return [];
   let command = !1, fromStdin = !1, i = 1;
   for (; i < argv.length; i++) {
@@ -5891,34 +5985,60 @@ function innerScript(argv, stdin) {
   }
   return command ? i < argv.length ? [argv[i]] : [] : fromStdin || i >= argv.length ? stdin : [];
 }
-var DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/, URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
-function segmentPaths(seg) {
+var DEVICE = /^\/dev\/(null|stdout|stderr|stdin|tty|fd\/\d+)$/, URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i, PASS_THROUGH_FLAGS = /* @__PURE__ */ new Set(["--env-file", "--env_file"]);
+function argPaths(args, forReads = !1) {
   let out = [];
-  for (let arg of seg.argv.slice(1)) {
-    let value = arg;
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i], value = arg;
     if (arg.startsWith("-")) {
       let eq = arg.indexOf("=");
+      if (forReads && PASS_THROUGH_FLAGS.has(eq === -1 ? arg : arg.slice(0, eq))) {
+        eq === -1 && i++;
+        continue;
+      }
       if (eq === -1) continue;
       value = arg.slice(eq + 1);
     }
     value && !URL_RE.test(value) && !DEVICE.test(value) && out.push(value);
   }
+  return out;
+}
+function segmentPaths(seg) {
+  let out = argPaths(seg.argv.slice(1));
   for (let r of seg.redirects) DEVICE.test(r) || out.push(r);
   for (let r of seg.inputRedirects) DEVICE.test(r) || out.push(r);
   return out;
+}
+var METADATA_ONLY = /* @__PURE__ */ new Set(["ls", "stat", "test", "[", "[[", "du", "realpath", "readlink", "basename", "dirname"]);
+function segmentReads(seg) {
+  let inputs = seg.inputRedirects.filter((r) => !DEVICE.test(r)), [cmd, ...rest] = seg.argv;
+  if (METADATA_ONLY.has(cmd)) return inputs;
+  let args = argPaths(rest, !0), drop = (value) => {
+    let at = args.lastIndexOf(value);
+    at !== -1 && args.splice(at, 1);
+  };
+  if (cmd === "mv") {
+    let operands = rest.filter((a) => !a.startsWith("-"));
+    operands.length && drop(operands[operands.length - 1]);
+  } else if (cmd !== "sed" && cmd !== "perl")
+    for (let w of argWrites(seg)) drop(w);
+  return [...args, ...inputs];
 }
 function segmentUrls(seg) {
   return seg.argv.filter((a) => /^https?:\/\//i.test(a));
 }
 var MUTATORS_ALL = /* @__PURE__ */ new Set(["rm", "rmdir", "unlink", "shred", "mv", "tee", "truncate", "touch", "mkdir"]), MUTATORS_LAST = /* @__PURE__ */ new Set(["cp", "ln", "install", "rsync", "scp"]), MUTATORS_SKIP_FIRST = /* @__PURE__ */ new Set(["chmod", "chown", "chgrp"]);
 function segmentWrites(seg) {
-  let out = seg.redirects.filter((r) => !DEVICE.test(r)), [cmd, ...rest] = seg.argv, operands = rest.filter((a) => !a.startsWith("-"));
+  return [...seg.redirects.filter((r) => !DEVICE.test(r)), ...argWrites(seg)];
+}
+function argWrites(seg) {
+  let out = [], [cmd, ...rest] = seg.argv, operands = rest.filter((a) => !a.startsWith("-")), valueOf = (flag2) => rest.filter((_, i) => rest[i - 1] === flag2);
   if (MUTATORS_ALL.has(cmd)) out.push(...operands);
   else if (MUTATORS_LAST.has(cmd) && operands.length) out.push(operands[operands.length - 1]);
   else if (MUTATORS_SKIP_FIRST.has(cmd)) out.push(...operands.slice(1));
   else if (cmd === "dd")
     for (let a of rest) a.startsWith("of=") && out.push(a.slice(3));
-  else (cmd === "sed" || cmd === "perl") && rest.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith("--in-place")) ? out.push(...operands.slice(1)) : (cmd === "curl" || cmd === "wget") && out.push(...downloadOutputs(cmd, rest));
+  else (cmd === "sed" || cmd === "perl") && rest.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith("--in-place")) ? out.push(...operands.slice(1)) : cmd === "curl" || cmd === "wget" ? out.push(...downloadOutputs(cmd, rest)) : cmd === "openssl" ? out.push(...valueOf("-out")) : cmd === "ssh-keygen" && out.push(...valueOf("-f"));
   return out.filter((p) => !URL_RE.test(p));
 }
 var DOWNLOAD_VALUE_FLAGS = { curl: "AbcCdDeEFhHKmoPQrtTuUwxXyYz", wget: "aABDeiIlnoOPQRtTUwX" }, DOWNLOAD_OUTPUT = { curl: ["o", "--output"], wget: ["O", "--output-document"] };
@@ -5942,7 +6062,7 @@ function downloadOutputs(cmd, args) {
 // src/engine.ts
 var RANK = { allow: 1, ask: 2, deny: 3 }, arr = (v) => v === void 0 ? [] : Array.isArray(v) ? v : [v], TEMP_ROOTS = [...new Set([import_node_os2.default.tmpdir(), "/tmp", "/private/tmp", "/var/tmp"].map((p) => import_node_path2.default.resolve(p)))];
 function inferTools(m) {
-  return m.command || m.commandLine ? ["shell"] : m.url ? ["fetch", "shell"] : ["any"];
+  return m.command || m.commandLine || m.script ? ["shell"] : m.url ? ["fetch", "shell"] : ["any"];
 }
 function ruleMatches(rule, call, ctx) {
   let m = rule.match;
@@ -5950,37 +6070,48 @@ function ruleMatches(rule, call, ctx) {
   let tools = m.tool ? arr(m.tool) : inferTools(m);
   if (!tools.includes("any") && !tools.includes(call.tool) || m.rawTool && !matchList([call.rawTool], arr(m.rawTool), (v, p) => urlRegex(p).test(v))) return !1;
   if (m.command) {
-    let texts = call.segments.map((s) => s.text);
-    if (!matchList(texts, arr(m.command), (v, p) => commandRegex(p).test(v))) return !1;
+    let patterns = arr(m.command), positive = patterns.filter((p) => !p.startsWith("!")), negative = patterns.filter((p) => p.startsWith("!")).map((p) => p.slice(1)), excluded = (text) => negative.some((p) => commandRegex(p).test(text));
+    if (!call.segments.some(
+      (s) => !excluded(s.matchText) && [s.matchText, ...s.tails].some((text) => positive.some((p) => commandRegex(p).test(text)) && !excluded(text))
+    )) return !1;
   }
   if (m.commandLine) {
     let lines = call.command && CASE_INSENSITIVE ? [call.command, call.command.toLowerCase()] : [call.command ?? ""];
     if (!call.command || !matchList(lines, arr(m.commandLine), (v, p) => commandLineRegex(p).test(v))) return !1;
   }
-  if (m.path && !matchList(call.paths, arr(m.path), (v, p) => pathMatches(v, p, ctx)) || m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx)) || m.url && !matchList(call.urls, arr(m.url), (v, p) => urlRegex(p).test(v))) return !1;
+  if (m.script) {
+    let scripts = CASE_INSENSITIVE ? [...call.scripts, ...call.scripts.map((s) => s.toLowerCase())] : call.scripts;
+    if (!matchList(scripts, arr(m.script), (v, p) => commandLineRegex(p).test(v))) return !1;
+  }
+  if (m.readPath && !matchList(call.reads, arr(m.readPath), (v, p) => pathMatches(v, p, ctx)) || m.path && !matchList(call.paths, arr(m.path), (v, p) => pathMatches(v, p, ctx)) || m.writePath && !matchList(call.writes, arr(m.writePath), (v, p) => pathMatches(v, p, ctx)) || m.url && !matchList(call.urls, arr(m.url), (v, p) => urlRegex(p).test(v))) return !1;
   if (m.outsideWorkspace !== void 0) {
-    let root = import_node_path2.default.resolve(ctx.root);
+    let pf = ctx.platform ?? HOST, root = pf.path.resolve(ctx.root);
     if (call.writes.some((p) => {
       let abs = resolvePath(p, ctx);
-      return !isInside(abs, root) && !TEMP_ROOTS.some((t) => isInside(abs, t));
+      return !isInside(abs, root, pf) && !TEMP_ROOTS.some((t) => isInside(abs, t, pf));
     }) !== m.outsideWorkspace) return !1;
   }
   return !0;
 }
 function evaluate(policy, call) {
-  let ctx = { cwd: call.cwd, root: policy.root }, matched = policy.rules.filter((r) => ruleMatches(r, call, ctx)), winner;
+  let matched = policy.rules.filter((r) => ruleMatches(r, call, { cwd: call.cwd, root: r.root ?? policy.root })), winner;
   for (let r of matched) (!winner || RANK[r.decision] > RANK[winner.decision]) && (winner = r);
   return winner ? { outcome: winner.decision, rule: winner, reason: winner.reason, matched } : { outcome: policy.default, matched };
 }
-function shellCall(command, base2) {
-  let segments = parseShell(command);
+function shellCall(command, base2, opts = {}) {
+  let { segments, scripts } = parseScript(command, opts), paths = (of) => {
+    let found = segments.flatMap(of);
+    return opts.powershell ? found.map((p) => p.replace(/\\/g, "/")) : found;
+  };
   return {
     ...base2,
     tool: "shell",
     command,
     segments,
-    paths: segments.flatMap(segmentPaths),
-    writes: segments.flatMap(segmentWrites),
+    scripts,
+    paths: paths(segmentPaths),
+    reads: paths(segmentReads),
+    writes: paths(segmentWrites),
     urls: segments.flatMap(segmentUrls)
   };
 }
@@ -5990,23 +6121,26 @@ function fileCall(tool, paths, base2) {
     ...base2,
     tool,
     segments: [],
+    scripts: [],
     paths: clean,
+    // An edit has to match the text that is already there, so it reveals the file as a read does.
+    reads: tool === "read" || tool === "edit" ? clean : [],
     writes: tool === "write" || tool === "edit" ? clean : [],
     urls: []
   };
 }
 function fetchCall(urls, base2) {
-  return { ...base2, tool: "fetch", segments: [], paths: [], writes: [], urls: urls.filter(Boolean) };
+  return { ...base2, tool: "fetch", segments: [], scripts: [], paths: [], reads: [], writes: [], urls: urls.filter(Boolean) };
 }
 function otherCall(tool, paths, base2) {
-  return { ...base2, tool, segments: [], paths, writes: [], urls: [] };
+  return { ...base2, tool, segments: [], scripts: [], paths, reads: paths, writes: [], urls: [] };
 }
 function describeCall(call) {
   return call.tool === "shell" ? call.command ?? "" : call.tool === "fetch" ? call.urls.join(" ") : call.paths.length ? call.paths.join(" ") : call.rawTool;
 }
 
 // src/policy.ts
-var import_node_fs = __toESM(require("node:fs"), 1), import_node_os3 = __toESM(require("node:os"), 1), import_node_path3 = __toESM(require("node:path"), 1), import_yaml = __toESM(require_dist(), 1);
+var import_node_crypto = __toESM(require("node:crypto"), 1), import_node_fs = __toESM(require("node:fs"), 1), import_node_os3 = __toESM(require("node:os"), 1), import_node_path3 = __toESM(require("node:path"), 1), import_yaml = __toESM(require_dist(), 1);
 
 // src/presets.ts
 var SECRET_PATHS = [
@@ -6055,7 +6189,7 @@ var SECRET_PATHS = [
   "~/.gemini/policies/**",
   "~/.gemini/config/hooks.json",
   ".agents/hooks.json"
-], recommended = [
+], INERT_COMMANDS = ["grep", "egrep", "fgrep", "rg", "ag", "git", "echo", "printf", "cat", "less", "more", "head", "tail", "ls", "find", "wc", "diff"], recommended = [
   {
     id: "no-rm-rf-root",
     decision: "deny",
@@ -6099,7 +6233,7 @@ var SECRET_PATHS = [
     id: "no-husky-bypass",
     decision: "deny",
     reason: "Disabling hooks with HUSKY=0 or SKIP= hides failing checks.",
-    match: { commandLine: ["/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/"] }
+    match: { script: ["/(?:^|[\\s;&|(])(?:HUSKY=0|SKIP=\\S+\\s+git\\b)/"] }
   },
   {
     id: "no-hooks-path-override",
@@ -6107,8 +6241,15 @@ var SECRET_PATHS = [
     reason: "Pointing core.hooksPath elsewhere skips the repository hooks. Fix the failing check instead.",
     // git config keys ignore case; `command` patterns never see `git -c`, so match the raw line.
     match: {
-      commandLine: ["/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)core\\.hookspath\\s*=/i", `/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=['"]*core\\.hookspath\\b/i`]
+      commandLine: [`/(?:^|\\s)(?:-c\\s*|--config-env[=\\s]+)['"]?core\\.hookspath\\s*=/i`, `/\\bGIT_CONFIG_(?:PARAMETERS|KEY_\\d+)=['"]*core\\.hookspath\\b/i`]
     }
+  },
+  {
+    id: "ask-hooks-path-config",
+    decision: "ask",
+    reason: "Changing core.hooksPath decides which git hooks run from now on.",
+    // Setting a value only: reading it (`git config core.hooksPath`, `--get`) and `--unset` are fine.
+    match: { command: ["/^git\\s+config\\b.*\\bcore\\.hookspath\\s+\\S/i"] }
   },
   {
     id: "ask-destructive-git",
@@ -6135,8 +6276,9 @@ var SECRET_PATHS = [
     id: "no-pipe-to-shell",
     decision: "deny",
     reason: "Piping a download straight into a shell runs unreviewed code. Download, inspect, then run.",
+    // `script`, not `commandLine`: a commit message or an echo that mentions `curl | sh` runs nothing.
     match: {
-      commandLine: [
+      script: [
         // Also through later pipes or `|&`, by path (/bin/sh), and behind sudo -E, env VAR=1 and friends.
         "/\\b(?:curl|wget|fetch|iwr|Invoke-WebRequest)\\b[^;&]*\\|&?\\s*(?:(?:\\S*\\/)?(?:sudo|doas|env|command|exec|nohup)\\s+(?:[^|;&]*\\s)?)?(?:\\S*\\/)?(?:ba|z|da|k|fi)?sh\\b/",
         `/\\b(?:ba|z)?sh\\s+(?:-c\\s+)?["']?(?:\\$\\(|<\\()\\s*(?:curl|wget)\\b/`,
@@ -6148,13 +6290,39 @@ var SECRET_PATHS = [
     id: "protect-secrets",
     decision: "deny",
     reason: "Secrets and credentials are off-limits to agents. Ask the human for the specific value you need.",
-    match: { path: SECRET_PATHS }
+    // Reads only: `ls .env`, `cp .env.example .env` and `node --env-file=.env` show the agent nothing.
+    match: { readPath: SECRET_PATHS }
+  },
+  {
+    id: "ask-write-secrets",
+    decision: "ask",
+    reason: "This creates, overwrites or deletes a secrets file.",
+    match: { writePath: SECRET_PATHS }
   },
   {
     id: "protect-guardrails",
     decision: "deny",
     reason: "Agents may not edit their own guardrails or agent settings. Ask the human to make this change.",
     match: { writePath: GUARDRAIL_FILES }
+  },
+  {
+    id: "no-guardrail-tampering",
+    decision: "deny",
+    reason: "Agents may not install, remove or re-trust their own guardrails. Ask the human to run this.",
+    match: { command: ["/^(?:.*\\s)?(?:\\S*\\/)?polyfence(?:\\.cjs)?\\s+(?:install|uninstall|trust|init)(?:\\s|$)/"] }
+  },
+  {
+    id: "ask-agent-bypass",
+    decision: "ask",
+    reason: "Starting another agent with its approvals, sandbox, rules or hooks turned off needs a human.",
+    match: {
+      command: [
+        "/^claude\\b.*\\s(?:--dangerously-skip-permissions|--allow-dangerously-skip-permissions|--bare|--safe-mode|--settings|--setting-sources|--permission-mode[=\\s]+bypassPermissions)(?:[=\\s]|$)/",
+        "/^codex\\b.*\\s(?:--dangerously-bypass-approvals-and-sandbox|--yolo|--ignore-rules|--ignore-user-config|--dangerously-bypass-hook-trust|(?:-s|--sandbox)[=\\s]+danger-full-access)(?:\\s|$)/",
+        "/^gemini\\b.*\\s(?:--yolo|-y|--approval-mode[=\\s]+yolo)(?:\\s|$)/",
+        "/^(?:agy|antigravity)\\b.*\\s--dangerously-skip-permissions(?:\\s|$)/"
+      ]
+    }
   },
   {
     id: "ask-outside-workspace",
@@ -6166,7 +6334,7 @@ var SECRET_PATHS = [
     id: "ask-sudo",
     decision: "ask",
     reason: "Commands with elevated privileges need a human.",
-    match: { commandLine: ["/(?:^|[\\s;&|(])(?:sudo|doas)\\s/"] }
+    match: { script: ["/(?:^|[\\s;&|(])(?:sudo|doas)\\s/"] }
   },
   {
     id: "ask-world-writable",
@@ -6224,7 +6392,10 @@ var SECRET_PATHS = [
     id: "ask-db-destroy",
     decision: "ask",
     reason: "This can destroy database data.",
+    // The SQL usually sits inside quotes (`psql -c "DROP TABLE x"`), so this looks at the raw line.
+    // The `command` list keeps it off commands that only search for, print or record such text.
     match: {
+      command: ["*", ...INERT_COMMANDS.map((c2) => `!${c2} *`)],
       commandLine: [
         "/\\b(?:DROP\\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE\\s+TABLE)\\b/i",
         "/\\bprisma\\s+(?:migrate\\s+reset|db\\s+push\\s+.*--force-reset)\\b/",
@@ -6284,19 +6455,100 @@ var PolicyError = class extends Error {
   }
   file;
 };
-function findPolicyFile(start) {
-  let dir = import_node_path3.default.resolve(start);
-  for (; ; ) {
-    for (let name of POLICY_FILENAMES) {
-      let candidate = import_node_path3.default.join(dir, name);
-      if (import_node_fs.default.existsSync(candidate)) return candidate;
-    }
-    let parent = import_node_path3.default.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+function userPolicyFile() {
   let user = import_node_path3.default.join(userConfigDir(), "polyfence.yaml");
   return import_node_fs.default.existsSync(user) ? user : void 0;
+}
+function findProjectPolicyFile(start) {
+  let dir = import_node_path3.default.resolve(start);
+  for (; ; ) {
+    if (dir !== userConfigDir())
+      for (let name of POLICY_FILENAMES) {
+        let candidate = import_node_path3.default.join(dir, name);
+        if (import_node_fs.default.existsSync(candidate)) return candidate;
+      }
+    let parent = import_node_path3.default.dirname(dir);
+    if (parent === dir) return;
+    dir = parent;
+  }
+}
+function findPolicyFile(start) {
+  return findProjectPolicyFile(start) ?? userPolicyFile();
+}
+var trustFile = () => import_node_path3.default.join(userConfigDir(), "trusted.json");
+function trustKey(file) {
+  try {
+    return import_node_fs.default.realpathSync(file);
+  } catch {
+    return import_node_path3.default.resolve(file);
+  }
+}
+function readTrust() {
+  try {
+    let data = JSON.parse(import_node_fs.default.readFileSync(trustFile(), "utf8"));
+    return isObj(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+function fileHash(file) {
+  try {
+    return import_node_crypto.default.createHash("sha256").update(import_node_fs.default.readFileSync(file)).digest("hex");
+  } catch {
+    return;
+  }
+}
+function isTrusted(file) {
+  let abs = trustKey(file), hash = fileHash(abs);
+  return hash !== void 0 && readTrust()[abs] === hash;
+}
+function setTrust(file, revoke = !1) {
+  let abs = trustKey(file), store = readTrust();
+  if (revoke) delete store[abs];
+  else {
+    let hash = fileHash(abs);
+    if (!hash) throw new PolicyError("cannot read policy", abs);
+    store[abs] = hash;
+  }
+  import_node_fs.default.mkdirSync(userConfigDir(), { recursive: !0 }), import_node_fs.default.writeFileSync(trustFile(), JSON.stringify(store, null, 2) + `
+`);
+}
+function loosens(policy) {
+  return policy.default === "allow" || policy.onError === "allow" || policy.rules.some((r) => r.decision === "allow");
+}
+function dropsBuiltins(policy) {
+  let mine = new Map(policy.rules.map((r) => [r.id, r]));
+  return PRESETS.recommended.some((r) => mine.get(r.id)?.preset === void 0);
+}
+function tightenOnly(policy) {
+  return {
+    ...policy,
+    default: policy.default === "allow" ? "defer" : policy.default,
+    onError: "deny",
+    rules: policy.rules.filter((r) => r.decision !== "allow"),
+    untrusted: policy.source ? [policy.source] : []
+  };
+}
+var DEFAULT_RANK = { allow: 0, defer: 1, ask: 2, deny: 3 }, AUDIT_RANK = { off: 0, matched: 1, all: 2 };
+function layerPolicies(layers) {
+  let primary = layers[layers.length - 1];
+  if (layers.length === 1) return primary;
+  let rules = [], seen = /* @__PURE__ */ new Set();
+  for (let layer of layers)
+    for (let rule of layer.rules) {
+      let stamped = { ...rule, root: rule.root ?? layer.root }, key = JSON.stringify([stamped.id, stamped.decision, stamped.match, stamped.root]);
+      seen.has(key) || (seen.add(key), rules.push(stamped));
+    }
+  let most = (rank, values) => values.reduce((a, b) => rank[b] > rank[a] ? b : a);
+  return {
+    ...primary,
+    default: most(DEFAULT_RANK, layers.map((l) => l.default)),
+    askFallback: layers.some((l) => l.askFallback === "deny") ? "deny" : "defer",
+    audit: most(AUDIT_RANK, layers.map((l) => l.audit)),
+    onError: layers.some((l) => l.onError === "deny") ? "deny" : "allow",
+    rules,
+    untrusted: layers.flatMap((l) => l.untrusted ?? [])
+  };
 }
 function loadPolicy(file) {
   let text;
@@ -6317,7 +6569,7 @@ function loadPolicy(file) {
 function builtinPolicy(root, preset = "recommended") {
   return buildPolicy({ extends: [preset] }, { root });
 }
-var DECISIONS = ["allow", "ask", "deny"], OUTCOMES = [...DECISIONS, "defer"], MATCH_KEYS = ["tool", "rawTool", "agent", "command", "commandLine", "path", "writePath", "url", "outsideWorkspace"];
+var DECISIONS = ["allow", "ask", "deny"], OUTCOMES = [...DECISIONS, "defer"], MATCH_KEYS = ["tool", "rawTool", "agent", "command", "commandLine", "script", "path", "readPath", "writePath", "url", "outsideWorkspace"], PATH_KEYS = ["path", "readPath", "writePath"];
 function isObj(v) {
   return typeof v == "object" && v !== null && !Array.isArray(v);
 }
@@ -6358,8 +6610,8 @@ function parseMatch(raw, where, file) {
       if (!AGENTS.includes(a)) throw new PolicyError(`${where}.match.agent: unknown agent "${a}"`, file);
     match.agent = agents;
   }
-  for (let key of ["rawTool", "command", "commandLine", "path", "writePath", "url"]) {
-    let list = strList(raw[key], `${where}.match.${key}`, file, key === "path" || key === "writePath");
+  for (let key of ["rawTool", "command", "commandLine", "script", "path", "readPath", "writePath", "url"]) {
+    let list = strList(raw[key], `${where}.match.${key}`, file, PATH_KEYS.includes(key));
     list && (match[key] = list);
   }
   if (raw.outsideWorkspace !== void 0) {
@@ -6430,25 +6682,34 @@ function buildPolicy(data, opts) {
 }
 
 // src/audit.ts
+var MAX_BYTES = 5 * 1024 * 1024, REDACTIONS = [
+  [/(authorization:\s*(?:bearer|basic|token)\s+)[^\s'"]+/gi, "$1[redacted]"],
+  [/((?:api[_-]?key|access[_-]?key|token|secret|password|passwd|pwd)["']?\s*[=:]\s*["']?)[^\s'"&]+/gi, "$1[redacted]"],
+  [/\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[abprs]-[A-Za-z0-9-]{10,})\b/g, "[redacted]"]
+];
+function redact(text) {
+  return REDACTIONS.reduce((t, [re, to]) => t.replace(re, to), text);
+}
 function auditFile(policy) {
   return !policy.source || import_node_path4.default.dirname(policy.source) === userConfigDir() ? import_node_path4.default.join(userConfigDir(), "audit.jsonl") : import_node_path4.default.join(import_node_path4.default.dirname(policy.source), ".polyfence", "audit.jsonl");
 }
-function record(policy, call, verdict, sent) {
+function record(policy, call, verdict, sent, context = {}) {
   if (policy.audit === "off" || policy.audit === "matched" && verdict.outcome === "defer") return;
   let entry = {
     ts: (/* @__PURE__ */ new Date()).toISOString(),
     agent: call.agent,
     tool: call.tool,
     rawTool: call.rawTool,
-    summary: describeCall(call).slice(0, 500),
+    summary: redact(describeCall(call)).slice(0, 500),
     outcome: verdict.outcome,
     sent,
     rule: verdict.rule?.id,
-    cwd: call.cwd
+    cwd: call.cwd,
+    ...context
   };
   try {
     let file = auditFile(policy);
-    import_node_fs2.default.mkdirSync(import_node_path4.default.dirname(file), { recursive: !0 }), import_node_fs2.default.appendFileSync(file, JSON.stringify(entry) + `
+    import_node_fs2.default.mkdirSync(import_node_path4.default.dirname(file), { recursive: !0 }), import_node_fs2.default.existsSync(file) && import_node_fs2.default.statSync(file).size > MAX_BYTES && import_node_fs2.default.renameSync(file, file + ".1"), import_node_fs2.default.appendFileSync(file, JSON.stringify(entry) + `
 `);
   } catch {
   }
@@ -6556,9 +6817,10 @@ function pathArgsPattern(patterns) {
 function geminiRulesFor(rule) {
   let m = rule.match;
   if (m.url || m.rawTool || m.outsideWorkspace !== void 0) return null;
-  let cmd = arr2(m.command), line = arr2(m.commandLine);
+  let cmd = arr2(m.command), line = [...arr2(m.commandLine), ...arr2(m.script)];
+  if (cmd.length && line.length) return null;
   if (cmd.length || line.length) {
-    if (m.path || m.writePath || cmd.some((p) => p.startsWith("!")) || line.some((p) => p.startsWith("!"))) return null;
+    if (m.path || m.readPath || m.writePath || cmd.some((p) => p.startsWith("!")) || line.some((p) => p.startsWith("!"))) return null;
     let out = [], prefixes = cmd.map(literalPrefix), simple = prefixes.filter(Boolean);
     simple.length && out.push({ toolName: GEMINI_SHELL, commandPrefix: simple.map((p) => p.join(" ")) });
     for (let i = 0; i < cmd.length; i++) {
@@ -6574,7 +6836,9 @@ function geminiRulesFor(rule) {
     }
     return out;
   }
-  let paths = m.path ? arr2(m.path) : m.writePath ? arr2(m.writePath) : [], kinds = arr2(m.tool).filter((t) => t !== "any"), toolNames = (kinds.length ? kinds : m.writePath ? ["write", "edit"] : ["read", "write", "edit"]).flatMap((k) => GEMINI_TOOLS[k] ?? []);
+  let pathKeys = [m.path, m.readPath, m.writePath].filter((v) => v !== void 0);
+  if (pathKeys.length > 1) return null;
+  let paths = arr2(pathKeys[0]), kinds = arr2(m.tool).filter((t) => t !== "any"), byKey = m.writePath ? ["write", "edit"] : m.readPath ? ["read", "edit"] : ["read", "write", "edit"], toolNames = (kinds.length ? pathKeys.length ? kinds.filter((k) => byKey.includes(k)) : kinds : byKey).flatMap((k) => GEMINI_TOOLS[k] ?? []);
   if (!toolNames.length) return null;
   if (!paths.length) return [{ toolName: toolNames }];
   let argsPattern = pathArgsPattern(paths);
@@ -6610,21 +6874,35 @@ function compileGemini(policy) {
 }
 
 // src/hook.ts
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 
 // src/adapters.ts
-var str = (v) => typeof v == "string" && v.length ? v : void 0, obj = (v) => typeof v == "object" && v !== null && !Array.isArray(v) ? v : {}, sessionCwd = (input) => str(input.cwd) ?? process.cwd(), PATH_KEYS = /^(file_?path|filePath|path|paths|filename|target_?file|TargetFile|absolute_?path|AbsolutePath|notebook_path|dir_?path|DirectoryPath|directory|SearchPath|FilePath|source|destination)$/i;
-function guessPaths(input) {
-  let out = [];
-  for (let [k, v] of Object.entries(input))
-    if (PATH_KEYS.test(k)) {
+var import_node_path5 = __toESM(require("node:path"), 1);
+var str = (v) => typeof v == "string" && v.length ? v : void 0, obj = (v) => typeof v == "object" && v !== null && !Array.isArray(v) ? v : {}, sessionCwd = (input) => str(input.cwd) ?? process.cwd(), PATH_KEYS2 = /^(file_?path|filePath|path|paths|filename|target_?file|TargetFile|absolute_?path|AbsolutePath|notebook_path|dir_?path|DirectoryPath|directory|SearchPath|FilePath|source|destination)$/i;
+function guessPaths(input, depth = 0, out = []) {
+  if (depth > 4 || typeof input != "object" || input === null) return out;
+  for (let [k, v] of Object.entries(input)) {
+    if (PATH_KEYS2.test(k)) {
       if (typeof v == "string" && v) out.push(v);
       else if (Array.isArray(v)) for (let x of v) typeof x == "string" && x && out.push(x);
     }
+    if (typeof v == "object" && v !== null)
+      for (let x of Array.isArray(v) ? v : [v]) guessPaths(x, depth + 1, out);
+  }
   return out;
 }
+var envDir = (name) => {
+  let dir = process.env[name];
+  return dir && import_node_path5.default.isAbsolute(dir) ? dir : void 0;
+};
+function globCandidates(glob) {
+  let brace = /\{([^{}]*)\}/.exec(glob);
+  if (brace) return brace[1].split(",").flatMap((alt) => globCandidates(glob.slice(0, brace.index) + alt + glob.slice(brace.index + brace[0].length)));
+  let bare = glob.replace(/[*?]/g, "");
+  return bare && bare !== glob ? [glob, bare] : [glob];
+}
 function message(verdict) {
-  let id = verdict.rule ? `[${verdict.rule.id}]` : "", reason = verdict.reason ?? (verdict.outcome === "deny" ? "blocked by policy" : "needs approval");
+  let id = verdict.rule ? `[${verdict.rule.id}]` : "", reason = verdict.reason ?? { deny: "blocked by policy", ask: "needs approval", allow: "allowed by policy", defer: "" }[verdict.outcome];
   return `polyfence${id}: ${reason}`;
 }
 function degradeAsk(verdict, policy) {
@@ -6640,6 +6918,8 @@ function claudeLikeCall(agent, input) {
     case "Bash":
     case "BashOutput":
       return shellCall(str(ti.command) ?? "", base2);
+    case "PowerShell":
+      return shellCall(str(ti.command) ?? "", base2, { powershell: !0 });
     case "Read":
     case "NotebookRead":
       return fileCall("read", [str(ti.file_path) ?? str(ti.notebook_path) ?? ""], base2);
@@ -6652,8 +6932,10 @@ function claudeLikeCall(agent, input) {
       return fileCall("edit", [str(ti.notebook_path) ?? ""], base2);
     case "Glob":
     case "Grep":
-    case "LS":
-      return fileCall("read", [str(ti.path) ?? "", str(ti.pattern) && tool === "Glob" ? ti.pattern : ""], base2);
+    case "LS": {
+      let glob = tool === "Grep" ? str(ti.glob) : tool === "Glob" ? str(ti.pattern) : void 0;
+      return fileCall("read", [str(ti.path) ?? "", ...glob ? tool === "Grep" ? globCandidates(glob) : [glob] : []], base2);
+    }
     case "WebFetch":
       return fetchCall([str(ti.url) ?? ""], base2);
     case "WebSearch":
@@ -6678,6 +6960,7 @@ var claude = {
   nativeAsk: !0,
   toCall: (input) => claudeLikeCall("claude", input),
   workspace: sessionCwd,
+  project: () => envDir("CLAUDE_PROJECT_DIR"),
   reply: (verdict) => claudeReply(verdict)
 };
 function shellJoin(argv) {
@@ -6743,7 +7026,7 @@ function geminiCall(input) {
   let tool = str(input.tool_name) ?? str(input.original_request_name) ?? "unknown", ti = obj(input.tool_input), base2 = { agent: "gemini", rawTool: tool, cwd: str(input.cwd) ?? process.cwd() }, kind = GEMINI_TOOLS2[tool];
   if (kind === "shell") {
     let call = shellCall(str(ti.command) ?? "", base2), dir = str(ti.directory) ?? str(ti.dir_path);
-    return dir ? { ...call, cwd: dir.startsWith("/") ? dir : `${base2.cwd}/${dir}` } : call;
+    return dir ? { ...call, cwd: import_node_path5.default.resolve(base2.cwd, dir) } : call;
   }
   if (kind === "fetch") {
     let urls = [str(ti.url), ...str(ti.prompt)?.match(/https?:\/\/\S+/g) ?? []].filter(Boolean);
@@ -6756,6 +7039,7 @@ var gemini = {
   nativeAsk: !1,
   toCall: geminiCall,
   workspace: sessionCwd,
+  project: () => envDir("GEMINI_PROJECT_DIR"),
   reply: (verdict, policy) => {
     let v = degradeAsk(verdict, policy);
     return v.outcome === "deny" ? { exitCode: 0, stdout: JSON.stringify({ decision: "deny", reason: message(v) }) } : v.outcome === "allow" ? { exitCode: 0, stdout: JSON.stringify({ decision: "allow", reason: message(v) }) } : { exitCode: 0, stdout: "{}" };
@@ -6793,23 +7077,45 @@ function detectAgent(input) {
 }
 
 // src/hook.ts
-function policyFor(cwd) {
+function ownPolicy(cwd) {
   let file = findPolicyFile(cwd);
   if (!file) return builtinPolicy(cwd);
   let policy = loadPolicy(file);
-  return import_node_path5.default.dirname(import_node_path5.default.resolve(file)) === userConfigDir() && (policy.root = cwd), policy;
+  return import_node_path6.default.dirname(import_node_path6.default.resolve(file)) === userConfigDir() && (policy.root = cwd), policy;
+}
+function policyFor(cwd, projectDir = cwd) {
+  let userFile = userPolicyFile(), projectFile = findProjectPolicyFile(projectDir), nearFile = findProjectPolicyFile(cwd), isNear = nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile)), load = (file, standsAlone) => {
+    let policy = loadPolicy(file);
+    return (loosens(policy) || standsAlone && dropsBuiltins(policy)) && !isTrusted(file) ? tightenOnly(policy) : policy;
+  }, project = projectFile ? load(projectFile, !userFile) : void 0, near = isNear ? load(nearFile, !1) : void 0, base2;
+  userFile ? base2 = { ...loadPolicy(userFile), root: project?.root ?? projectDir } : (!project || project.untrusted?.length) && (base2 = builtinPolicy(project?.root ?? projectDir));
+  let primary = project ?? base2;
+  return layerPolicies([base2, near, project].filter((l) => l !== void 0 && l !== primary).concat(primary));
+}
+var TOOL_EVENTS = /* @__PURE__ */ new Set(["PreToolUse", "BeforeTool"]), str2 = (v) => typeof v == "string" && v.length ? v : void 0;
+function auditContext(input) {
+  return {
+    session: str2(input.session_id) ?? str2(input.conversationId),
+    agentId: str2(input.agent_id),
+    agentType: str2(input.agent_type),
+    toolUseId: str2(input.tool_use_id),
+    mode: str2(input.permission_mode)
+  };
 }
 function runHook(stdin, agentArg) {
   let input;
   try {
-    if (input = JSON.parse(stdin), typeof input != "object" || input === null) throw new Error("not an object");
+    if (input = JSON.parse(stdin), typeof input != "object" || input === null || Array.isArray(input)) throw new Error("not an object");
   } catch {
-    return { exitCode: 0, stderr: `polyfence: hook input was not JSON; ignoring
+    let reason = "hook input was not JSON, failing closed";
+    return agentArg ? ADAPTERS[agentArg].reply({ outcome: "deny", reason, matched: [] }, builtinPolicy(process.cwd())) : { exitCode: 2, stderr: `polyfence: ${reason}
 ` };
   }
+  let event = str2(input.hook_event_name);
+  if (event && !TOOL_EVENTS.has(event)) return { exitCode: 0 };
   let adapter = ADAPTERS[agentArg ?? detectAgent(input)], workspace = adapter.workspace(input), policy;
   try {
-    policy = policyFor(workspace);
+    policy = policyFor(workspace, adapter.project?.(input) ?? workspace);
   } catch (err) {
     let verdict2 = { outcome: "deny", reason: `policy error, failing closed: ${err.message}`, matched: [] };
     return adapter.reply(verdict2, builtinPolicy(workspace));
@@ -6823,11 +7129,11 @@ function runHook(stdin, agentArg) {
     verdict = { outcome: "deny", reason: `internal error, failing closed: ${err.message}`, matched: [] };
   }
   let sent = verdict.outcome;
-  return sent === "ask" && !adapter.nativeAsk && (sent = policy.askFallback), sent === "allow" && adapter.name === "codex" && (sent = "defer"), call && record(policy, call, verdict, sent), adapter.reply(verdict, policy, call);
+  return sent === "ask" && !adapter.nativeAsk && (sent = policy.askFallback), sent === "allow" && adapter.name === "codex" && (sent = "defer"), call && record(policy, call, verdict, sent, auditContext(input)), adapter.reply(verdict, policy, call);
 }
 
 // src/install.ts
-var import_node_fs3 = __toESM(require("node:fs"), 1), import_node_os5 = __toESM(require("node:os"), 1), import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_fs3 = __toESM(require("node:fs"), 1), import_node_os5 = __toESM(require("node:os"), 1), import_node_path7 = __toESM(require("node:path"), 1);
 var MARKER = /polyfence\S*(?:\s.*)?\shook(?:\s|$)|polyfence hook/, AGY_TOOLS2 = ["run_command", "write_to_file", "replace_file_content", "multi_replace_file_content", "view_file", "grep_search", "read_url_content"];
 function base(scope, root) {
   return scope === "user" ? import_node_os5.default.homedir() : root;
@@ -6836,13 +7142,13 @@ function agentFiles(agent, scope, root) {
   let b = base(scope, root);
   switch (agent) {
     case "claude":
-      return { hooks: import_node_path6.default.join(b, ".claude", "settings.json") };
+      return { hooks: import_node_path7.default.join(b, ".claude", "settings.json") };
     case "codex":
-      return { hooks: import_node_path6.default.join(b, ".codex", "hooks.json"), rules: import_node_path6.default.join(b, ".codex", "rules", "polyfence.rules") };
+      return { hooks: import_node_path7.default.join(b, ".codex", "hooks.json"), rules: import_node_path7.default.join(b, ".codex", "rules", "polyfence.rules") };
     case "gemini":
-      return { hooks: import_node_path6.default.join(b, ".gemini", "settings.json"), rules: import_node_path6.default.join(b, ".gemini", "policies", "polyfence.toml") };
+      return { hooks: import_node_path7.default.join(b, ".gemini", "settings.json"), rules: import_node_path7.default.join(b, ".gemini", "policies", "polyfence.toml") };
     case "antigravity":
-      return { hooks: scope === "user" ? import_node_path6.default.join(b, ".gemini", "config", "hooks.json") : import_node_path6.default.join(b, ".agents", "hooks.json") };
+      return { hooks: scope === "user" ? import_node_path7.default.join(b, ".gemini", "config", "hooks.json") : import_node_path7.default.join(b, ".agents", "hooks.json") };
   }
 }
 function readJson(file) {
@@ -6876,7 +7182,7 @@ function hookEntries(agent, command) {
 }
 function writeFile(file, content, dryRun) {
   let exists = import_node_fs3.default.existsSync(file);
-  return exists && import_node_fs3.default.readFileSync(file, "utf8") === content ? "unchanged" : (dryRun || (import_node_fs3.default.mkdirSync(import_node_path6.default.dirname(file), { recursive: !0 }), import_node_fs3.default.writeFileSync(file, content)), exists ? "update" : "create");
+  return exists && import_node_fs3.default.readFileSync(file, "utf8") === content ? "unchanged" : (dryRun || (import_node_fs3.default.mkdirSync(import_node_path7.default.dirname(file), { recursive: !0 }), import_node_fs3.default.writeFileSync(file, content)), exists ? "update" : "create");
 }
 var stringify = (data) => JSON.stringify(data, null, 2) + `
 `;
@@ -7041,19 +7347,19 @@ function parseAgents(list) {
   for (let a of list) AGENTS.includes(a) || fail(`unknown agent "${a}" (expected ${AGENTS.join(", ")}, all)`);
   return list;
 }
-function loadOrFail(cwd, explicit) {
+function loadOrFail(cwd, explicit, own = !1) {
   try {
-    return explicit ? loadPolicy(explicit) : policyFor(cwd);
+    return explicit ? loadPolicy(explicit) : own ? ownPolicy(cwd) : policyFor(cwd);
   } catch (err) {
     throw err instanceof PolicyError && fail(err.message), err;
   }
 }
 function cmdInit(args) {
-  let file = import_node_path7.default.resolve("polyfence.yaml");
+  let file = import_node_path8.default.resolve("polyfence.yaml");
   import_node_fs4.default.existsSync(file) && !args.flags.force && fail("polyfence.yaml already exists (use --force to overwrite)");
   let preset = flag(args, "preset") ?? "recommended";
   PRESETS[preset] || fail(`unknown preset "${preset}" (available: ${Object.keys(PRESETS).join(", ")})`), import_node_fs4.default.writeFileSync(file, INIT_TEMPLATE.replace("extends: [recommended]", `extends: [${preset}]`)), console.log(`${c.green("created")} polyfence.yaml ${c.dim(`(preset: ${preset}, ${PRESETS[preset].length} rules)`)}`);
-  let gitignore = import_node_path7.default.resolve(".gitignore"), line = ".polyfence/", current = import_node_fs4.default.existsSync(gitignore) ? import_node_fs4.default.readFileSync(gitignore, "utf8") : "";
+  let gitignore = import_node_path8.default.resolve(".gitignore"), line = ".polyfence/", current = import_node_fs4.default.existsSync(gitignore) ? import_node_fs4.default.readFileSync(gitignore, "utf8") : "";
   current.split(`
 `).some((l) => l.trim() === line) || (import_node_fs4.default.writeFileSync(gitignore, current + (current && !current.endsWith(`
 `) ? `
@@ -7061,9 +7367,14 @@ function cmdInit(args) {
 `), console.log(`${c.green("updated")} .gitignore ${c.dim("(audit log)")}`)), console.log(`
 Next: ${c.bold("polyfence install")} to wire it into Claude Code, Codex, Gemini CLI and Antigravity.`);
 }
+var TRUST_HINT = "the built-in rules stay on and its `allow` settings are ignored until you run `polyfence trust`";
+function warnUntrusted(policy) {
+  for (let file of policy.untrusted ?? []) console.log(c.yellow(`
+${file} is not trusted: ${TRUST_HINT}.`));
+}
 function printChanges(changes, dryRun) {
   for (let ch of changes) {
-    let verb = { create: c.green("create"), update: c.blue("update"), remove: c.red("remove"), unchanged: c.dim("ok    ") }[ch.action], rel = import_node_path7.default.relative(process.cwd(), ch.file), shown = rel.startsWith("..") ? ch.file : rel;
+    let verb = { create: c.green("create"), update: c.blue("update"), remove: c.red("remove"), unchanged: c.dim("ok    ") }[ch.action], rel = import_node_path8.default.relative(process.cwd(), ch.file), shown = rel.startsWith("..") ? ch.file : rel;
     console.log(`  ${verb} ${shown}${ch.note ? c.dim(`  (${ch.note})`) : ""}`);
   }
   dryRun && console.log(c.dim(`
@@ -7079,7 +7390,7 @@ function onPath(bin) {
 function cmdInstall(args, remove) {
   let agents = parseAgents(args.positional.slice(1)), scope = flag(args, "scope") ?? "project";
   scope !== "project" && scope !== "user" && fail("--scope must be project or user");
-  let dryRun = !!args.flags["dry-run"], policy = loadOrFail(process.cwd(), flag(args, "policy")), root = policy.source && scope === "project" ? import_node_path7.default.dirname(policy.source) : process.cwd(), command = flag(args, "command") ?? "polyfence hook";
+  let dryRun = !!args.flags["dry-run"], policy = loadOrFail(process.cwd(), flag(args, "policy")), root = policy.source && scope === "project" ? import_node_path8.default.dirname(policy.source) : process.cwd(), command = flag(args, "command") ?? "polyfence hook";
   console.log(`${remove ? "Removing" : "Installing"} polyfence (${scope} scope) for ${agents.join(", ")}
 `);
   for (let agent of agents)
@@ -7091,11 +7402,11 @@ function cmdInstall(args, remove) {
   ${c.red("skipped")} ${err.message}`);
     }
   dryRun && console.log(c.dim(`
-(dry run: nothing was written)`)), remove || (policy.source || console.log(c.yellow('\nNo polyfence.yaml found: hooks will use the built-in "recommended" preset. Run `polyfence init` to customize.')), command.startsWith("polyfence ") && !onPath("polyfence") && (console.log(c.yellow("\n`polyfence` is not on your PATH, so agents cannot run the hook yet.")), console.log(c.yellow('Install it globally (npm i -g polyfence) or pass --command "npx --no polyfence hook".'))), agents.includes("antigravity") && console.log(c.dim(`
+(dry run: nothing was written)`)), remove || (policy.source || console.log(c.yellow('\nNo polyfence.yaml found: hooks will use the built-in "recommended" preset. Run `polyfence init` to customize.')), command.startsWith("polyfence ") && !onPath("polyfence") && (console.log(c.yellow("\n`polyfence` is not on your PATH, so agents cannot run the hook yet.")), console.log(c.yellow('Install it globally (npm i -g polyfence) or pass --command "npx --no polyfence hook".'))), warnUntrusted(policy), agents.includes("antigravity") && console.log(c.dim(`
 Antigravity support is experimental; its hook format is still settling.`)));
 }
 function syntheticCall(args) {
-  let cwd = import_node_path7.default.resolve(flag(args, "cwd") ?? process.cwd()), agent = flag(args, "agent") ?? "claude";
+  let cwd = import_node_path8.default.resolve(flag(args, "cwd") ?? process.cwd()), agent = flag(args, "agent") ?? "claude";
   AGENTS.includes(agent) || fail(`unknown agent "${agent}"`);
   let tool = flag(args, "tool"), base2 = { agent, rawTool: tool ?? "Bash", cwd }, target = flag(args, "path") ?? flag(args, "url") ?? args.positional.slice(1).join(" ");
   if (!tool || tool === "shell") {
@@ -7118,12 +7429,12 @@ function cmdCheck(args) {
       call.writes.length && console.log(c.dim(`  writes: ${call.writes.join(", ")}`));
     }
     console.log(c.dim(`
-  policy: ${policy.source ?? "built-in recommended preset"}`));
+  policy: ${policy.source ?? "built-in recommended preset"}`)), flag(args, "policy") || warnUntrusted(policy);
   }
   process.exitCode = verdict.outcome === "deny" ? 2 : 0;
 }
 function cmdTest(args) {
-  let policy = loadOrFail(process.cwd(), flag(args, "policy"));
+  let policy = loadOrFail(process.cwd(), flag(args, "policy"), !0);
   if (!policy.tests.length) {
     console.log(c.yellow(`No tests in policy. Add a \`tests:\` list, e.g.
   tests:
@@ -7143,10 +7454,21 @@ function cmdCompile(args) {
   let target = args.positional[1];
   target !== "codex" && target !== "gemini" && fail("usage: polyfence compile <codex|gemini> [--out file]");
   let policy = loadOrFail(process.cwd(), flag(args, "policy")), text = target === "codex" ? compileCodex(policy) : compileGemini(policy), out = flag(args, "out");
-  out ? (import_node_fs4.default.mkdirSync(import_node_path7.default.dirname(import_node_path7.default.resolve(out)), { recursive: !0 }), import_node_fs4.default.writeFileSync(out, text), console.log(`${c.green("wrote")} ${out}`)) : process.stdout.write(text);
+  out ? (import_node_fs4.default.mkdirSync(import_node_path8.default.dirname(import_node_path8.default.resolve(out)), { recursive: !0 }), import_node_fs4.default.writeFileSync(out, text), console.log(`${c.green("wrote")} ${out}`)) : process.stdout.write(text);
+}
+function cmdTrust(args) {
+  let file = flag(args, "policy") ?? findProjectPolicyFile(process.cwd());
+  file || fail("no project policy found here. A user-level policy is always trusted.");
+  let revoke = !!args.flags.revoke;
+  try {
+    revoke || loadPolicy(file), setTrust(file, revoke);
+  } catch (err) {
+    fail(err.message);
+  }
+  revoke ? console.log(`${c.green("revoked")} ${file}`) : (console.log(`${c.green("trusted")} ${file}`), console.log(c.dim("The policy now applies as written, including `allow`, `disable` and replaced built-in rules. Editing the file withdraws trust.")));
 }
 function cmdLog(args) {
-  let policy = loadOrFail(process.cwd()), file = auditFile(policy), entries = readAudit(file), outcome = flag(args, "outcome") ?? (args.flags.deny ? "deny" : void 0);
+  let policy = loadOrFail(process.cwd(), flag(args, "policy")), file = auditFile(policy), entries = readAudit(file), outcome = flag(args, "outcome") ?? (args.flags.deny ? "deny" : void 0);
   outcome && (entries = entries.filter((e) => e.outcome === outcome));
   let n = Number(flag(args, "n") ?? 20);
   if (entries = entries.slice(-n), args.flags.json) {
@@ -7165,15 +7487,19 @@ function cmdLog(args) {
 function cmdDoctor() {
   let cwd = process.cwd(), policy;
   try {
-    if (policy = policyFor(cwd), console.log(`${c.green("\u2713")} policy: ${policy.source ?? "none found, using built-in recommended preset"} ${c.dim(`(${policy.rules.length} rules)`)}`), policy.tests.length) {
-      let failed = runTests(policy).filter((r) => !r.ok).length;
-      console.log(`${failed ? c.red("\u2717") : c.green("\u2713")} policy tests: ${failed ? `${failed} failing` : `${policy.tests.length} passing`}`);
+    policy = policyFor(cwd), console.log(`${c.green("\u2713")} policy: ${policy.source ?? "none found, using built-in recommended preset"} ${c.dim(`(${policy.rules.length} rules)`)}`);
+    let own = ownPolicy(cwd);
+    if (own.tests.length) {
+      let failed = runTests(own).filter((r) => !r.ok).length;
+      console.log(`${failed ? c.red("\u2717") : c.green("\u2713")} policy tests: ${failed ? `${failed} failing` : `${own.tests.length} passing`}`);
     }
+    for (let file of policy.untrusted ?? []) console.log(`${c.yellow("!")} ${file} is not trusted: ${TRUST_HINT}`);
+    own.source && !policy.untrusted?.length && isTrusted(own.source) && console.log(`${c.green("\u2713")} trusted: the project policy applies as written`);
   } catch (err) {
     console.log(`${c.red("\u2717")} policy: ${err.message}`);
   }
   console.log(`${onPath("polyfence") ? c.green("\u2713") : c.yellow("!")} polyfence on PATH${onPath("polyfence") ? "" : " (agents cannot run the hook; npm i -g polyfence)"}`);
-  let root = policy?.source ? import_node_path7.default.dirname(policy.source) : cwd, bins = { claude: "claude", codex: "codex", gemini: "gemini", antigravity: "agy" };
+  let root = policy?.source ? import_node_path8.default.dirname(policy.source) : cwd, bins = { claude: "claude", codex: "codex", gemini: "gemini", antigravity: "agy" };
   console.log("");
   for (let agent of AGENTS) {
     let project = isInstalled(agent, "project", root), user = isInstalled(agent, "user", root), wired = project || user, where = [project && "project", user && "user"].filter(Boolean).join(" + "), bin = onPath(bins[agent]) ? "" : c.dim(` (${bins[agent]} not found on PATH)`);
@@ -7197,8 +7523,8 @@ async function readStdin() {
 }
 async function cmdHook(args) {
   let agent = args.positional[1];
-  agent && !AGENTS.includes(agent) && (process.stderr.write(`polyfence: unknown agent "${agent}"
-`), process.exit(0));
+  agent && !AGENTS.includes(agent) && (process.stderr.write(`polyfence: unknown agent "${agent}", failing closed
+`), process.exit(2));
   let reply = runHook(await readStdin(), agent);
   reply.stdout && process.stdout.write(reply.stdout + `
 `), reply.stderr && process.stderr.write(reply.stderr), process.exitCode = reply.exitCode;
@@ -7213,6 +7539,7 @@ ${c.bold("Usage")}
   polyfence check --tool read|write|edit --path <file>
   polyfence check --tool fetch --url <url>
   polyfence test                                   run the tests in polyfence.yaml
+  polyfence trust [--revoke]                       let this project's policy use \`allow\`
   polyfence compile codex|gemini [--out file]      print native static rules
   polyfence log [-n 20] [--deny] [--json]          show the audit log
   polyfence doctor                                 show what is wired up where
@@ -7236,6 +7563,8 @@ async function main(argv) {
       return cmdCheck(args);
     case "test":
       return cmdTest(args);
+    case "trust":
+      return cmdTrust(args);
     case "compile":
       return cmdCompile(args);
     case "log":
