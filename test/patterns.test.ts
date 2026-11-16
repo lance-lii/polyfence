@@ -47,7 +47,8 @@ test('home globs expand ~', () => {
   assert.ok(pathMatches('$HOME/.ssh/config', '~/.ssh/**', ctx));
   assert.ok(pathMatches('${HOME}/.ssh/config', '~/.ssh/**', ctx));
   assert.ok(!pathMatches(`${home}/.sshx/a`, '~/.ssh/**', ctx));
-  for (const p of ['~', '$HOME', '${HOME}']) assert.equal(resolvePath(p, ctx), path.resolve(home), p);
+  // Resolved paths use forward slashes on every platform.
+  for (const p of ['~', '$HOME', '${HOME}']) assert.equal(resolvePath(p, ctx), path.resolve(home).split(path.sep).join('/'), p);
 });
 
 test('path case follows the platform', () => {
