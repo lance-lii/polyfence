@@ -47,6 +47,60 @@ export function findPolicyFile(start: string): string | undefined {
   return findProjectPolicyFile(start) ?? userPolicyFile();
 }
 
+// ---- file cache ------------------------------------------------------------------
+//
+// Policy files and trusted.json are read, hashed and parsed once, and read again only when a
+// stat shows a different file, size or time.
+
+interface Snapshot {
+  stamp: string;
+  settled: boolean;
+  bytes: Buffer;
+  hash?: string;
+  policy?: Policy;
+  trust?: Readonly<Record<string, string>>;
+}
+
+const snapshots = new Map<string, Snapshot>();
+
+/**
+ * File times move in steps of a few ms (ext4, NTFS) up to 2 s (FAT), so an edit of the same size
+ * soon after a read can leave every stat field unchanged. Until a file's times are older than
+ * this, its bytes are compared on every read.
+ */
+const SETTLE_MS = 3000;
+
+function snapshot(file: string): Snapshot {
+  const key = path.resolve(file);
+  const now = Date.now();
+  let st: fs.BigIntStats | undefined;
+  try {
+    st = fs.statSync(file, { bigint: true, throwIfNoEntry: false });
+  } catch {
+    // The read below reports the error.
+  }
+  const stamp = st ? `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}` : '';
+  const cached = snapshots.get(key);
+  // The stat comes first: a change made after it shows up in the next one.
+  if (cached?.settled && stamp && cached.stamp === stamp) return cached;
+  const bytes = fs.readFileSync(file);
+  const settled = st !== undefined && now - Number(st.mtimeMs) > SETTLE_MS && now - Number(st.ctimeMs) > SETTLE_MS;
+  if (cached?.bytes.equals(bytes)) return Object.assign(cached, { stamp, settled });
+  if (snapshots.size >= 64) snapshots.clear();
+  const fresh: Snapshot = { stamp, settled, bytes };
+  snapshots.set(key, fresh);
+  return fresh;
+}
+
+/** Cached policies are shared by every caller, so they are frozen: change a copy instead. */
+export function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const v of Object.values(value)) deepFreeze(v);
+  }
+  return value;
+}
+
 // ---- trust ---------------------------------------------------------------------
 //
 // A project policy can come from anywhere: a cloned repository, a pull, a directory the agent
@@ -65,10 +119,14 @@ export function trustKey(file: string): string {
   }
 }
 
-function readTrust(): Record<string, string> {
+function readTrust(): Readonly<Record<string, string>> {
   try {
-    const data = JSON.parse(fs.readFileSync(trustFile(), 'utf8'));
-    return isObj(data) ? (data as Record<string, string>) : {};
+    const snap = snapshot(trustFile());
+    if (!snap.trust) {
+      const data = JSON.parse(snap.bytes.toString('utf8'));
+      snap.trust = Object.freeze(isObj(data) ? (data as Record<string, string>) : {});
+    }
+    return snap.trust;
   } catch {
     return {};
   }
@@ -76,7 +134,8 @@ function readTrust(): Record<string, string> {
 
 function fileHash(file: string): string | undefined {
   try {
-    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    const snap = snapshot(file);
+    return (snap.hash ??= crypto.createHash('sha256').update(snap.bytes).digest('hex'));
   } catch {
     return undefined;
   }
@@ -91,7 +150,7 @@ export function isTrusted(file: string): boolean {
 /** Record (or with `revoke`, forget) the current content of a policy file as trusted. */
 export function setTrust(file: string, revoke = false): void {
   const abs = trustKey(file);
-  const store = readTrust();
+  const store = { ...readTrust() };
   if (revoke) delete store[abs];
   else {
     const hash = fileHash(abs);
@@ -163,21 +222,24 @@ export function layerPolicies(layers: Policy[]): Policy {
 }
 
 export function loadPolicy(file: string): Policy {
-  let text: string;
+  let snap: Snapshot;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    snap = snapshot(file);
   } catch (err) {
     throw new PolicyError(`cannot read policy: ${(err as Error).message}`, file);
   }
+  const abs = path.resolve(file);
+  const isUserPolicy = path.dirname(abs) === userConfigDir();
+  // A user-level policy is rooted at the current directory, which may have changed since.
+  if (snap.policy && snap.policy.root === (isUserPolicy ? process.cwd() : path.dirname(abs))) return snap.policy;
   let data: unknown;
   try {
-    data = parseYaml(text);
+    data = parseYaml(snap.bytes.toString('utf8'));
   } catch (err) {
     throw new PolicyError(`invalid YAML: ${(err as Error).message}`, file);
   }
-  const abs = path.resolve(file);
-  const isUserPolicy = path.dirname(abs) === userConfigDir();
-  return buildPolicy(data ?? {}, { source: abs, root: isUserPolicy ? undefined : path.dirname(abs) });
+  snap.policy = deepFreeze(buildPolicy(data ?? {}, { source: abs, root: isUserPolicy ? undefined : path.dirname(abs) }));
+  return snap.policy;
 }
 
 /** The policy used when no file exists: the recommended preset, rooted at `cwd`. */

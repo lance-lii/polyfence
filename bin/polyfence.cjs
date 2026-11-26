@@ -6475,6 +6475,28 @@ function findProjectPolicyFile(start) {
 function findPolicyFile(start) {
   return findProjectPolicyFile(start) ?? userPolicyFile();
 }
+var snapshots = /* @__PURE__ */ new Map(), SETTLE_MS = 3e3;
+function snapshot(file) {
+  let key = import_node_path3.default.resolve(file), now = Date.now(), st;
+  try {
+    st = import_node_fs.default.statSync(file, { bigint: !0, throwIfNoEntry: !1 });
+  } catch {
+  }
+  let stamp = st ? `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}` : "", cached = snapshots.get(key);
+  if (cached?.settled && stamp && cached.stamp === stamp) return cached;
+  let bytes = import_node_fs.default.readFileSync(file), settled = st !== void 0 && now - Number(st.mtimeMs) > SETTLE_MS && now - Number(st.ctimeMs) > SETTLE_MS;
+  if (cached?.bytes.equals(bytes)) return Object.assign(cached, { stamp, settled });
+  snapshots.size >= 64 && snapshots.clear();
+  let fresh = { stamp, settled, bytes };
+  return snapshots.set(key, fresh), fresh;
+}
+function deepFreeze(value) {
+  if (typeof value == "object" && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (let v of Object.values(value)) deepFreeze(v);
+  }
+  return value;
+}
 var trustFile = () => import_node_path3.default.join(userConfigDir(), "trusted.json");
 function trustKey(file) {
   try {
@@ -6485,15 +6507,20 @@ function trustKey(file) {
 }
 function readTrust() {
   try {
-    let data = JSON.parse(import_node_fs.default.readFileSync(trustFile(), "utf8"));
-    return isObj(data) ? data : {};
+    let snap = snapshot(trustFile());
+    if (!snap.trust) {
+      let data = JSON.parse(snap.bytes.toString("utf8"));
+      snap.trust = Object.freeze(isObj(data) ? data : {});
+    }
+    return snap.trust;
   } catch {
     return {};
   }
 }
 function fileHash(file) {
   try {
-    return import_node_crypto.default.createHash("sha256").update(import_node_fs.default.readFileSync(file)).digest("hex");
+    let snap = snapshot(file);
+    return snap.hash ??= import_node_crypto.default.createHash("sha256").update(snap.bytes).digest("hex");
   } catch {
     return;
   }
@@ -6503,7 +6530,7 @@ function isTrusted(file) {
   return hash !== void 0 && readTrust()[abs] === hash;
 }
 function setTrust(file, revoke = !1) {
-  let abs = trustKey(file), store = readTrust();
+  let abs = trustKey(file), store = { ...readTrust() };
   if (revoke) delete store[abs];
   else {
     let hash = fileHash(abs);
@@ -6551,20 +6578,21 @@ function layerPolicies(layers) {
   };
 }
 function loadPolicy(file) {
-  let text;
+  let snap;
   try {
-    text = import_node_fs.default.readFileSync(file, "utf8");
+    snap = snapshot(file);
   } catch (err) {
     throw new PolicyError(`cannot read policy: ${err.message}`, file);
   }
+  let abs = import_node_path3.default.resolve(file), isUserPolicy = import_node_path3.default.dirname(abs) === userConfigDir();
+  if (snap.policy && snap.policy.root === (isUserPolicy ? process.cwd() : import_node_path3.default.dirname(abs))) return snap.policy;
   let data;
   try {
-    data = (0, import_yaml.parse)(text);
+    data = (0, import_yaml.parse)(snap.bytes.toString("utf8"));
   } catch (err) {
     throw new PolicyError(`invalid YAML: ${err.message}`, file);
   }
-  let abs = import_node_path3.default.resolve(file), isUserPolicy = import_node_path3.default.dirname(abs) === userConfigDir();
-  return buildPolicy(data ?? {}, { source: abs, root: isUserPolicy ? void 0 : import_node_path3.default.dirname(abs) });
+  return snap.policy = deepFreeze(buildPolicy(data ?? {}, { source: abs, root: isUserPolicy ? void 0 : import_node_path3.default.dirname(abs) })), snap.policy;
 }
 function builtinPolicy(root, preset = "recommended") {
   return buildPolicy({ extends: [preset] }, { root });
@@ -7081,16 +7109,19 @@ function ownPolicy(cwd) {
   let file = findPolicyFile(cwd);
   if (!file) return builtinPolicy(cwd);
   let policy = loadPolicy(file);
-  return import_node_path6.default.dirname(import_node_path6.default.resolve(file)) === userConfigDir() && (policy.root = cwd), policy;
+  return import_node_path6.default.dirname(import_node_path6.default.resolve(file)) === userConfigDir() ? { ...policy, root: cwd } : policy;
 }
+var layered = /* @__PURE__ */ new Map();
 function policyFor(cwd, projectDir = cwd) {
   let userFile = userPolicyFile(), projectFile = findProjectPolicyFile(projectDir), nearFile = findProjectPolicyFile(cwd), isNear = nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile)), load = (file, standsAlone) => {
-    let policy = loadPolicy(file);
-    return (loosens(policy) || standsAlone && dropsBuiltins(policy)) && !isTrusted(file) ? tightenOnly(policy) : policy;
-  }, project = projectFile ? load(projectFile, !userFile) : void 0, near = isNear ? load(nearFile, !1) : void 0, base2;
-  userFile ? base2 = { ...loadPolicy(userFile), root: project?.root ?? projectDir } : (!project || project.untrusted?.length) && (base2 = builtinPolicy(project?.root ?? projectDir));
-  let primary = project ?? base2;
-  return layerPolicies([base2, near, project].filter((l) => l !== void 0 && l !== primary).concat(primary));
+    let policy2 = loadPolicy(file), loosening = loosens(policy2) || standsAlone && dropsBuiltins(policy2);
+    return { policy: policy2, tighten: loosening && !isTrusted(file) };
+  }, loadedProject = projectFile ? load(projectFile, !userFile) : void 0, loadedNear = isNear ? load(nearFile, !1) : void 0, user = userFile ? loadPolicy(userFile) : void 0, from = [user, loadedProject?.policy, loadedProject?.tighten, loadedNear?.policy, loadedNear?.tighten], key = JSON.stringify([cwd, projectDir]), hit = layered.get(key);
+  if (hit && hit.from.every((v, i) => v === from[i])) return hit.policy;
+  let layer = (l) => l && (l.tighten ? tightenOnly(l.policy) : l.policy), project = layer(loadedProject), near = layer(loadedNear), base2;
+  user ? base2 = { ...user, root: project?.root ?? projectDir } : (!project || project.untrusted?.length) && (base2 = builtinPolicy(project?.root ?? projectDir));
+  let primary = project ?? base2, policy = deepFreeze(layerPolicies([base2, near, project].filter((l) => l !== void 0 && l !== primary).concat(primary)));
+  return layered.size >= 64 && layered.clear(), layered.set(key, { from, policy }), policy;
 }
 var TOOL_EVENTS = /* @__PURE__ */ new Set(["PreToolUse", "BeforeTool"]), str2 = (v) => typeof v == "string" && v.length ? v : void 0;
 function auditContext(input) {
