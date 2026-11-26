@@ -2,7 +2,7 @@ import path from 'node:path';
 import { ADAPTERS, detectAgent, type HookReply } from './adapters.js';
 import { record, type AuditContext } from './audit.js';
 import { evaluate } from './engine.js';
-import { builtinPolicy, dropsBuiltins, findPolicyFile, findProjectPolicyFile, isTrusted, layerPolicies, loadPolicy, loosens, tightenOnly, trustKey, userConfigDir, userPolicyFile } from './policy.js';
+import { builtinPolicy, deepFreeze, dropsBuiltins, findPolicyFile, findProjectPolicyFile, isTrusted, layerPolicies, loadPolicy, loosens, tightenOnly, trustKey, userConfigDir, userPolicyFile } from './policy.js';
 import type { AgentName, Outcome, Policy, ToolCall, Verdict } from './types.js';
 
 /**
@@ -14,9 +14,10 @@ export function ownPolicy(cwd: string): Policy {
   if (!file) return builtinPolicy(cwd);
   const policy = loadPolicy(file);
   // A user-level policy has no project of its own: the workspace is wherever the agent runs.
-  if (path.dirname(path.resolve(file)) === userConfigDir()) policy.root = cwd;
-  return policy;
+  return path.dirname(path.resolve(file)) === userConfigDir() ? { ...policy, root: cwd } : policy;
 }
+
+const layered = new Map<string, { from: unknown[]; policy: Policy }>();
 
 /**
  * The policy enforced for a tool call made in `cwd`, in a session that started in `projectDir`.
@@ -35,21 +36,36 @@ export function policyFor(cwd: string, projectDir = cwd): Policy {
   const nearFile = findProjectPolicyFile(cwd);
   const isNear = nearFile && (!projectFile || trustKey(nearFile) !== trustKey(projectFile));
 
-  const load = (file: string, standsAlone: boolean): Policy => {
+  const load = (file: string, standsAlone: boolean) => {
     const policy = loadPolicy(file);
     const loosening = loosens(policy) || (standsAlone && dropsBuiltins(policy));
-    return loosening && !isTrusted(file) ? tightenOnly(policy) : policy;
+    return { policy, tighten: loosening && !isTrusted(file) };
   };
-  const project = projectFile ? load(projectFile, !userFile) : undefined;
-  const near = isNear ? load(nearFile, false) : undefined;
+  const loadedProject = projectFile ? load(projectFile, !userFile) : undefined;
+  const loadedNear = isNear ? load(nearFile, false) : undefined;
+  const user = userFile ? loadPolicy(userFile) : undefined;
+
+  // loadPolicy returns the same object until its file changes, so the result can be reused
+  // while every input is identical.
+  const from = [user, loadedProject?.policy, loadedProject?.tighten, loadedNear?.policy, loadedNear?.tighten];
+  const key = JSON.stringify([cwd, projectDir]);
+  const hit = layered.get(key);
+  if (hit && hit.from.every((v, i) => v === from[i])) return hit.policy;
+
+  const layer = (l?: { policy: Policy; tighten: boolean }) => l && (l.tighten ? tightenOnly(l.policy) : l.policy);
+  const project = layer(loadedProject);
+  const near = layer(loadedNear);
 
   let base: Policy | undefined;
-  if (userFile) base = { ...loadPolicy(userFile), root: project?.root ?? projectDir };
+  if (user) base = { ...user, root: project?.root ?? projectDir };
   else if (!project || project.untrusted?.length) base = builtinPolicy(project?.root ?? projectDir);
 
   // The session's project is the primary layer: it names the workspace, the audit log and the tests.
   const primary = project ?? base!;
-  return layerPolicies([base, near, project].filter((l): l is Policy => l !== undefined && l !== primary).concat(primary));
+  const policy = deepFreeze(layerPolicies([base, near, project].filter((l): l is Policy => l !== undefined && l !== primary).concat(primary)));
+  if (layered.size >= 64) layered.clear();
+  layered.set(key, { from, policy });
+  return policy;
 }
 
 /** Hook events that carry a tool call: Claude Code, Codex and Antigravity `PreToolUse`, Gemini `BeforeTool`. */

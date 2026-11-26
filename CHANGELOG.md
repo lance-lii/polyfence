@@ -31,3 +31,4 @@ Hardening before the first release:
 - `command` patterns are also tried against commands a segment wraps, so `op run -- git push -f`, `docker exec app rm -rf /` and `find -exec` are caught without listing every wrapper. Quoted text, the arguments of `echo`/`grep`/`man` and the subcommand of tools such as `git` are skipped.
 - Windows: path rules handle drive letters, backslashes, Git Bash paths and `~`; `git.exe` is `git`; the `PowerShell` tool is parsed with `\` as a path separator. CI runs Node 20 and, without gating, Windows.
 - Hook events that carry no tool call get a neutral reply instead of a verdict.
+- Loaded and layered policies are cached within a process and refreshed as soon as a policy file or `trusted.json` changes.
